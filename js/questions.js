@@ -91,25 +91,32 @@ const SLIDERS = [
 // A habit is unlocked when its predecessor in QUESTIONS order has been checked
 // at least 5 times in the previous 7 days (not counting today). The first habit
 // is always unlocked.
-async function computeUnlockedSet(dateISO) {
-  const unlocked = new Set();
-  unlocked.add(QUESTIONS[0].id);
-  // Build last-7-days lookup ending the day before `dateISO`
+// Returns { qid: count_in_last_7_days_ending_day_before_dateISO }
+async function recentCheckCounts(dateISO) {
   const endDate = new Date(dateISO + 'T00:00:00');
   const startDate = new Date(endDate);
   startDate.setDate(startDate.getDate() - 7);
   const startISO = startDate.toISOString().slice(0, 10);
   const prevISO = new Date(endDate.getTime() - 86400000).toISOString().slice(0, 10);
   const recent = await getDaysInRange(startISO, prevISO);
-  const checkCount = (qid) => recent.filter((r) => r.questions?.[qid]?.checked).length;
+  const counts = {};
+  for (const q of QUESTIONS) counts[q.id] = 0;
+  for (const r of recent) {
+    for (const q of QUESTIONS) {
+      if (r.questions?.[q.id]?.checked) counts[q.id]++;
+    }
+  }
+  return counts;
+}
 
+async function computeUnlockedSet(dateISO, counts) {
+  const c = counts || (await recentCheckCounts(dateISO));
+  const unlocked = new Set();
+  unlocked.add(QUESTIONS[0].id);
   for (let i = 1; i < QUESTIONS.length; i++) {
     const prev = QUESTIONS[i - 1];
-    if (checkCount(prev.id) >= 5) {
-      unlocked.add(QUESTIONS[i].id);
-    } else {
-      break; // stack stops here
-    }
+    if (c[prev.id] >= 5) unlocked.add(QUESTIONS[i].id);
+    else break;
   }
   return unlocked;
 }

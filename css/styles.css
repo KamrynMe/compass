@@ -625,10 +625,15 @@ button { cursor: pointer; touch-action: manipulation; }
 }
 .input-text {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 10px 12px;
   border: 1px solid var(--rule); border-radius: 8px;
   font-size: 16px; background: white;
+  display: block;
 }
+.setting-row { min-width: 0; }
+.card { min-width: 0; overflow: hidden; }
 .row-buttons {
   display: flex; gap: 8px; flex-wrap: wrap;
 }
@@ -691,6 +696,59 @@ button { cursor: pointer; touch-action: manipulation; }
   vertical-align: middle;
 }
 .q-emoji { display: inline-block; margin-right: 4px; font-size: 19px; vertical-align: middle; }
+
+/* Per-habit 7-day streak badge */
+.q-streak {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+  background: var(--bg2);
+  color: var(--ink3);
+}
+.q-streak.mid  { background: #f7e9c4; color: var(--gold-deep); }
+.q-streak.high { background: #d6f0e0; color: #1b6b3a; }
+
+/* Check pop + row flash on tick */
+@keyframes check-pop {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(74,154,106,0.55); }
+  40%  { transform: scale(1.28); box-shadow: 0 0 0 14px rgba(74,154,106,0); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(74,154,106,0); }
+}
+.q-check.just-checked { animation: check-pop 0.42s ease-out; }
+@keyframes row-flash-kf {
+  0%   { background: rgba(74,154,106,0.22); }
+  100% { background: transparent; }
+}
+.q.row-flash { animation: row-flash-kf 0.7s ease-out; }
+.q-check:checked { transition: background 0.15s, border-color 0.15s; }
+
+/* Beats view */
+.beats-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.beat-btn {
+  background: white;
+  border: 2px solid var(--rule);
+  border-radius: 10px;
+  padding: 14px 12px;
+  text-align: left;
+  cursor: pointer;
+  min-height: 80px;
+  transition: transform 0.15s, border-color 0.15s, background 0.15s;
+}
+.beat-btn:active { transform: scale(0.97); }
+.beat-btn.active {
+  border-color: var(--wc, var(--gold));
+  background: color-mix(in srgb, var(--wc, var(--gold)) 14%, white);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wc, var(--gold)) 30%, transparent);
+}
+.beat-name { font-size: 17px; font-weight: 700; color: var(--wc, var(--ink)); }
+.beat-range { font-size: 12px; color: var(--ink3); margin-top: 2px; font-weight: 600; }
+.beat-use { font-size: 13px; color: var(--ink2); margin-top: 6px; line-height: 1.4; }
 
 /* Prerequisite pillar styling */
 .pillar.prerequisite .pillar-head { background: #f0e8d6; border-bottom: 1px solid var(--gold-deep); }

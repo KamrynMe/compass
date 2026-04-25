@@ -156,6 +156,25 @@ async function renderSettingsView(container) {
     showToast('All data erased');
   });
 
+  const cardF = document.createElement('div');
+  cardF.className = 'card';
+  const sEnabled = soundsEnabled();
+  cardF.innerHTML = `
+    <h3>Feedback</h3>
+    <label class="setting-row" style="flex-direction:row;align-items:center;justify-content:space-between;">
+      <div>
+        <div class="setting-label">Check sounds</div>
+        <div class="setting-help">Plays a short chime when checking off a habit.</div>
+      </div>
+      <input type="checkbox" id="snd-toggle" ${sEnabled ? 'checked' : ''} style="width:28px;height:28px;">
+    </label>
+  `;
+  container.appendChild(cardF);
+  cardF.querySelector('#snd-toggle').addEventListener('change', (e) => {
+    setSoundsEnabled(e.target.checked);
+    showToast(e.target.checked ? 'Sounds on' : 'Sounds off');
+  });
+
   const card4 = document.createElement('div');
   card4.className = 'card';
   card4.innerHTML = `

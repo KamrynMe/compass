@@ -1,4 +1,4 @@
-const CACHE = 'compass-v1';
+const CACHE = 'compass-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -13,6 +13,8 @@ const ASSETS = [
   './js/settings.js',
   './js/weather.js',
   './js/correlations.js',
+  './js/feedback.js',
+  './js/beats.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',

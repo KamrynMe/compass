@@ -2,6 +2,7 @@ const ROUTES = {
   today: renderTodayView,
   calendar: renderCalendarView,
   analytics: renderAnalyticsView,
+  beats: renderBeatsView,
   settings: renderSettingsView,
 };
 
@@ -36,6 +37,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const t = await getSetting('reminderTime');
     if (t) scheduleReminder(t);
   } catch (_) {}
+  try { await loadSoundPref(); } catch (_) {}
 });
 
 function showToast(msg, ms = 2200) {

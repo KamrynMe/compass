@@ -2,7 +2,8 @@
 async function renderDayEditor(record, opts = {}) {
   const onChange = opts.onChange || (() => {});
   const wrap = document.createElement('div');
-  const unlocked = await computeUnlockedSet(record.date);
+  const counts = await recentCheckCounts(record.date);
+  const unlocked = await computeUnlockedSet(record.date, counts);
   const unlockedCount = unlocked.size;
 
   // Progress + score
@@ -127,6 +128,10 @@ async function renderDayEditor(record, opts = {}) {
       const isUnlocked = unlocked.has(q.id);
       const row = document.createElement('div');
       row.className = 'q' + (q.anchor ? ' anchor' : '') + (qrec.checked ? ' checked' : '') + (isUnlocked ? '' : ' locked');
+      const streak = counts[q.id] || 0;
+      let streakTier = 'low';
+      if (streak >= 5) streakTier = 'high';
+      else if (streak >= 3) streakTier = 'mid';
       row.innerHTML = `
         <label class="q-check-tap">
           <input type="checkbox" class="q-check" ${qrec.checked ? 'checked' : ''} ${isUnlocked ? '' : 'disabled'} data-q="${q.id}">
@@ -134,6 +139,7 @@ async function renderDayEditor(record, opts = {}) {
         <div class="q-body">
           <div class="q-text"><span class="q-emoji">${q.emoji || ''}</span> ${escapeHtml(q.text)}${q.anchor ? ' <span class="q-star">★ Anchor</span>' : ''}${isUnlocked ? '' : ' <span class="q-lock">🔒 Locked</span>'}</div>
           <div class="q-note">${escapeHtml(q.note)}</div>
+          <div class="q-streak ${streakTier}" title="Checked ${streak} of the last 7 days">${streak} / 7 last 7 days</div>
           <textarea class="q-noteinput${qrec.note ? ' open' : ''}" placeholder="Add a note for ${q.id.toUpperCase()}…" data-note="${q.id}">${escapeHtml(qrec.note || '')}</textarea>
         </div>
         <button type="button" class="q-expand${qrec.note ? ' open' : ''}" aria-label="Toggle note">+</button>
@@ -145,6 +151,8 @@ async function renderDayEditor(record, opts = {}) {
         record.questions[q.id].checked = checkbox.checked;
         record.questions[q.id].checkedAt = checkbox.checked ? new Date().toISOString() : null;
         row.classList.toggle('checked', checkbox.checked);
+        if (checkbox.checked) { playCheckSound(); flashCheck(row); }
+        else { playUncheckSound(); }
         updateProgress();
         onChange(record);
       });
