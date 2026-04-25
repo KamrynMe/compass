@@ -18,8 +18,26 @@ async function renderDayEditor(record, opts = {}) {
       <div><div class="score-label">Daily Score</div><div class="score-value" id="ed-score">0</div></div>
       <div><div class="score-label">Unlocked</div><div class="score-value" id="ed-unlocked">${unlockedCount} / ${QUESTIONS.length}</div></div>
     </div>
+    <div class="next-tick" id="ed-next-tick" title="Score multiplier for new checks degrades smoothly through your waking window."></div>
   `;
   wrap.appendChild(progressCard);
+
+  // Live "next change" countdown
+  let _tickTimer = null;
+  async function updateNextTick() {
+    const el = wrap.querySelector('#ed-next-tick');
+    if (!el) return;
+    const wake = (await getSetting('wakeTime')) || '05:00';
+    const wind = (await getSetting('winddownTime')) || '19:00';
+    const ms = msUntilNextScoreTick(wake, wind, record.date);
+    if (ms == null) { el.textContent = 'Outside waking window — multiplier is 1×.'; return; }
+    const sec = Math.round(ms / 1000);
+    const m = Math.floor(sec / 60), s = sec % 60;
+    el.innerHTML = `<span class="next-tick-label">Next score change</span><span class="next-tick-val">${m}m ${String(s).padStart(2, '0')}s</span>`;
+    clearTimeout(_tickTimer);
+    _tickTimer = setTimeout(updateNextTick, Math.min(1000, ms));
+  }
+  setTimeout(updateNextTick, 0);
 
   // Sliders
   const slidersCard = document.createElement('div');
@@ -45,7 +63,7 @@ async function renderDayEditor(record, opts = {}) {
       valOut.textContent = val;
       record.sliders[s.id] = val;
       clearTimeout(timer);
-      timer = setTimeout(() => onChange(record), 300);
+      timer = setTimeout(() => { onChange(record); maybeAutoFetchWeather(); }, 300);
     });
   }
 
@@ -65,7 +83,7 @@ async function renderDayEditor(record, opts = {}) {
         <div class="weather-cell"><div class="v">${t(w?.realFeel3pm, '°F')}</div><div class="l">3 PM Feel</div></div>
         <div class="weather-cell"><div class="v">${w?.precipitation == null ? '—' : (w.precipitation > 0 ? w.precipitation + '"' : 'None')}</div><div class="l">Precip</div></div>
       </div>
-      <button class="weather-retry" id="ed-weather-fetch">${w?.fetchedAt ? 'Refresh weather' : 'Fetch weather'}</button>
+      <button class="weather-retry" id="ed-weather-fetch">Refresh weather</button>
       <details style="margin-top:10px;">
         <summary class="muted" style="cursor:pointer;font-size:13px;">Edit manually</summary>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:8px;">
@@ -78,7 +96,9 @@ async function renderDayEditor(record, opts = {}) {
     `;
     weatherCard.querySelector('#ed-weather-fetch').addEventListener('click', async () => {
       try {
-        const w2 = await getOrFetchWeatherForToday({ ...record, weather: null });
+        const loc = await getSetting('location');
+        if (!loc || loc.lat == null) throw new Error('No location set — open Settings to add one.');
+        const w2 = await fetchWeather(loc.lat, loc.lon, record.date);
         record.weather = w2;
         onChange(record);
         renderWeather();
@@ -106,6 +126,7 @@ async function renderDayEditor(record, opts = {}) {
     });
   }
   renderWeather();
+  weatherCard._rerender = renderWeather;
 
   // Pillars + questions (only render pillars that have ≥1 question)
   for (const p of PILLARS) {
@@ -142,9 +163,12 @@ async function renderDayEditor(record, opts = {}) {
           <input type="checkbox" class="q-check" ${qrec.checked ? 'checked' : ''} ${isUnlocked ? '' : 'disabled'} data-q="${q.id}">
         </label>
         <div class="q-body">
-          <div class="q-text"><span class="q-emoji">${q.emoji || ''}</span> ${escapeHtml(q.text)}${q.anchor ? ' <span class="q-star">★ Anchor</span>' : ''}${isUnlocked ? '' : ' <span class="q-lock">🔒 Locked</span>'}</div>
+          <div class="q-text"><span class="q-num">${displayNumberFor(q.id)}.</span> <span class="q-emoji">${q.emoji || ''}</span> ${escapeHtml(q.text)}${q.anchor ? ' <span class="q-star">★ Anchor</span>' : ''}${isUnlocked ? '' : ' <span class="q-lock">🔒 Locked</span>'}</div>
           <div class="q-note">${escapeHtml(q.note)}</div>
-          <div class="q-streak ${streakTier}" title="Checked ${streak} of the last 7 days">${streak} / 7 last 7 days</div>
+          <div class="q-meta-row">
+            <span class="q-streak ${streakTier}" title="Checked ${streak} of the last 7 days">${streak} / 7 last 7 days</span>
+            <span class="q-points-badge" data-points="${q.id}" style="display:none;"></span>
+          </div>
           <textarea class="q-noteinput${qrec.note ? ' open' : ''}" placeholder="Add a note for ${q.id.toUpperCase()}…" data-note="${q.id}">${escapeHtml(qrec.note || '')}</textarea>
         </div>
         <button type="button" class="q-expand${qrec.note ? ' open' : ''}" aria-label="Toggle note">+</button>
@@ -156,16 +180,12 @@ async function renderDayEditor(record, opts = {}) {
         record.questions[q.id].checked = checkbox.checked;
         record.questions[q.id].checkedAt = checkbox.checked ? new Date().toISOString() : null;
         row.classList.toggle('checked', checkbox.checked);
-        if (checkbox.checked) {
-          playCheckSound();
-          flashCheck(row);
-          const pts = await pointsForCheck(record, q.id);
-          showPointsPop(row, pts);
-        } else {
-          playUncheckSound();
-        }
+        if (checkbox.checked) { playCheckSound(); flashCheck(row); }
+        else { playUncheckSound(); }
+        await renderPointsBadge(row, q.id);
         await onChange(record);
         await refreshStreaksAndUnlocks();
+        maybeAutoFetchWeather();
       });
       const noteInput = row.querySelector('.q-noteinput');
       const expandBtn = row.querySelector('.q-expand');
@@ -233,6 +253,37 @@ async function renderDayEditor(record, opts = {}) {
     const scoreEl = wrap.querySelector('#ed-score');
     if (scoreEl) scoreEl.textContent = sc.score.toLocaleString();
   }
+  let _autoFetchTried = !!record.weather;
+  async function maybeAutoFetchWeather() {
+    if (_autoFetchTried || record.weather) return;
+    _autoFetchTried = true;
+    try {
+      const loc = await getSetting('location');
+      if (!loc || loc.lat == null) return;
+      const w = await fetchWeather(loc.lat, loc.lon, record.date);
+      record.weather = w;
+      onChange(record);
+      const card = wrap.querySelector('#ed-weather-card');
+      if (card && card._rerender) card._rerender();
+    } catch (e) {
+      // Silent — user can hit Refresh manually.
+    }
+  }
+
+  async function renderPointsBadge(row, qid) {
+    const badge = row.querySelector(`.q-points-badge[data-points="${qid}"]`);
+    if (!badge) return;
+    const qr = record.questions[qid];
+    if (qr && qr.checked) {
+      const pts = await pointsForCheck(record, qid);
+      badge.textContent = '+' + pts.toLocaleString();
+      badge.style.display = '';
+    } else {
+      badge.textContent = '';
+      badge.style.display = 'none';
+    }
+  }
+
   async function refreshStreaksAndUnlocks() {
     const c2 = await recentCheckCounts(record.date);
     const u2 = await computeUnlockedSet(record.date, c2);

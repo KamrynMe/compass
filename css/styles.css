@@ -176,18 +176,22 @@ button { cursor: pointer; touch-action: manipulation; }
 
 /* Weather card */
 .weather-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
 }
+.weather-grid-4 { grid-template-columns: repeat(4, 1fr); gap: 4px; }
 .weather-cell {
   text-align: center;
+  min-width: 0;
 }
 .weather-cell .v {
-  font-size: 20px; font-weight: 700; color: var(--ink);
+  font-size: 17px; font-weight: 700; color: var(--ink);
+  white-space: nowrap;
 }
 .weather-cell .l {
-  font-size: 12px; color: var(--ink3); font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.6px;
+  font-size: 10px; color: var(--ink3); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.4px;
   margin-top: 2px;
+  white-space: nowrap;
 }
 .weather-retry {
   margin-top: 10px;
@@ -233,16 +237,17 @@ button { cursor: pointer; touch-action: manipulation; }
 }
 .pillar.collapsed .pillar-body { max-height: 0; }
 
-.pillar.spiritual .pillar-head { background: var(--s-bg); border-bottom: 1px solid var(--s-border); }
-.pillar.spiritual .pillar-name { color: var(--s-color); }
-.pillar.health .pillar-head { background: var(--h-bg); border-bottom: 1px solid var(--h-border); }
-.pillar.health .pillar-name { color: var(--h-color); }
-.pillar.strategy .pillar-head { background: var(--st-bg); border-bottom: 1px solid var(--st-border); }
-.pillar.strategy .pillar-name { color: var(--st-color); }
-.pillar.financial .pillar-head { background: var(--f-bg); border-bottom: 1px solid var(--f-border); }
+/* Pillar palette: Spiritual=red, Health=blue, Strategy=gold, Enjoyment=green, Financial=purple. */
+.pillar.spiritual .pillar-head { background: var(--e-bg);  border-bottom: 1px solid var(--e-border); }
+.pillar.spiritual .pillar-name { color: var(--e-color); }
+.pillar.health    .pillar-head { background: var(--st-bg); border-bottom: 1px solid var(--st-border); }
+.pillar.health    .pillar-name { color: var(--st-color); }
+.pillar.strategy  .pillar-head { background: var(--s-bg);  border-bottom: 1px solid var(--s-border); }
+.pillar.strategy  .pillar-name { color: var(--s-color); }
+.pillar.financial .pillar-head { background: var(--f-bg);  border-bottom: 1px solid var(--f-border); }
 .pillar.financial .pillar-name { color: var(--f-color); }
-.pillar.enjoyment .pillar-head { background: var(--e-bg); border-bottom: 1px solid var(--e-border); }
-.pillar.enjoyment .pillar-name { color: var(--e-color); }
+.pillar.enjoyment .pillar-head { background: var(--h-bg);  border-bottom: 1px solid var(--h-border); }
+.pillar.enjoyment .pillar-name { color: var(--h-color); }
 
 /* Questions */
 .q {
@@ -288,11 +293,11 @@ button { cursor: pointer; touch-action: manipulation; }
   flex-shrink: 0;
 }
 
-.pillar.spiritual .q-check { --check-color: var(--s-border); }
-.pillar.health .q-check { --check-color: var(--h-border); }
-.pillar.strategy .q-check { --check-color: var(--st-border); }
+.pillar.spiritual .q-check { --check-color: var(--e-border); }
+.pillar.health    .q-check { --check-color: var(--st-border); }
+.pillar.strategy  .q-check { --check-color: var(--s-border); }
 .pillar.financial .q-check { --check-color: var(--f-border); }
-.pillar.enjoyment .q-check { --check-color: var(--e-border); }
+.pillar.enjoyment .q-check { --check-color: var(--h-border); }
 
 .q-body { flex: 1; min-width: 0; }
 .q-text {
@@ -439,30 +444,21 @@ button { cursor: pointer; touch-action: manipulation; }
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 4px;
-  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   cursor: pointer;
   position: relative;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--ink);
   min-height: 44px;
 }
-.cal-day.empty { background: transparent; cursor: default; }
-.cal-day.today { border-color: var(--gold); font-weight: 700; }
-.cal-day.dim { opacity: 0.25; }
-.cal-day .dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--rule);
+.cal-day.empty { background: transparent !important; cursor: default; }
+.cal-day.today { outline: 3px solid var(--gold); outline-offset: -3px; }
+.cal-day.late {
+  border: 2px dashed var(--e-border);
 }
-.cal-day .dot.l1 { background: var(--rule); }
-.cal-day .dot.l2 { background: #e0a050; }
-.cal-day .dot.l3 { background: var(--gold); }
-.cal-day .dot.l4 { background: var(--h-border); }
-.cal-day .late-mark {
-  position: absolute;
-  top: 2px; right: 4px;
-  font-size: 10px;
-  color: var(--e-border);
-}
+.cal-num { font-size: 14px; font-weight: 700; }
+.cal-pct { font-size: 10px; font-weight: 600; color: var(--ink2); }
 
 /* Modal */
 .modal-overlay {
@@ -725,29 +721,74 @@ button { cursor: pointer; touch-action: manipulation; }
 }
 .q.row-flash { animation: row-flash-kf 0.7s ease-out; }
 
-/* Floating "+points" popup */
+/* Persistent points badge */
 .q { position: relative; }
-.points-pop {
-  position: absolute;
-  right: 12px;
-  top: 12px;
+.q-meta-row {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px;
+}
+.q-points-badge {
+  display: inline-block;
   background: #1b6b3a;
   color: white;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 999px;
-  pointer-events: none;
-  animation: points-fly 1.4s ease-out forwards;
-  box-shadow: 0 2px 8px rgba(27,107,58,0.35);
-  z-index: 5;
+  letter-spacing: 0.3px;
+  box-shadow: 0 1px 3px rgba(27,107,58,0.25);
 }
-@keyframes points-fly {
-  0%   { transform: translateY(0)   scale(0.7); opacity: 0; }
-  15%  { transform: translateY(-4px) scale(1.05); opacity: 1; }
-  70%  { transform: translateY(-22px) scale(1);   opacity: 1; }
-  100% { transform: translateY(-44px) scale(0.95); opacity: 0; }
+
+/* Display number */
+.q-num {
+  display: inline-block;
+  font-weight: 700;
+  color: var(--ink3);
+  font-variant-numeric: tabular-nums;
+  margin-right: 4px;
 }
+
+/* Next score-change countdown */
+.next-tick {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--bg2);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.next-tick-label { color: var(--ink3); font-weight: 600; }
+.next-tick-val { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* Lag slider */
+.lag-wrap {
+  margin: 12px 0;
+  padding: 10px 12px;
+  background: var(--bg2);
+  border-radius: 8px;
+}
+.lag-label { font-size: 13px; font-weight: 600; color: var(--ink2); margin-bottom: 4px; }
+
+/* Beats detail line */
+.beat-detail {
+  font-size: 11px; color: var(--ink3); margin-top: 4px; line-height: 1.4;
+  font-style: normal;
+}
+
+/* Backup nag banner */
+.backup-banner {
+  position: fixed;
+  left: 12px; right: 12px;
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 12px);
+  background: var(--ink);
+  color: white;
+  padding: 14px 16px;
+  border-radius: 12px;
+  display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  z-index: 90;
+}
+.backup-banner .btn-primary { background: var(--gold); }
+.backup-banner .btn-secondary { background: transparent; color: white; border-color: rgba(255,255,255,0.4); }
 .q-check:checked { transition: background 0.15s, border-color 0.15s; }
 
 /* Beats view */

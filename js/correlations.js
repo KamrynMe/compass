@@ -88,10 +88,20 @@ function compositeForRecord(record, varObjs) {
   return n ? sum / n : null;
 }
 
-function buildPairs(records, xVars, yVars) {
+function buildPairs(records, xVars, yVars, lagDays = 0) {
+  const byDate = {};
+  for (const r of records) byDate[r.date] = r;
   const pairs = [];
   for (const r of records) {
-    const x = compositeForRecord(r, xVars);
+    let xRec = r;
+    if (lagDays > 0) {
+      const d = new Date(r.date + 'T00:00:00');
+      d.setDate(d.getDate() - lagDays);
+      const xISO = d.toISOString().slice(0, 10);
+      xRec = byDate[xISO];
+      if (!xRec) continue;
+    }
+    const x = compositeForRecord(xRec, xVars);
     const y = compositeForRecord(r, yVars);
     if (x != null && y != null) pairs.push({ x, y, date: r.date });
   }

@@ -1,4 +1,4 @@
-let _corrState = { x: [], y: [], search: '' };
+let _corrState = { x: [], y: [], search: '', lag: 0 };
 let _charts = { trend: null, pillar: null, scatter: null };
 
 async function renderAnalyticsView(container) {
@@ -101,7 +101,7 @@ function drawPillarTrend(all) {
   if (_charts.pillar) _charts.pillar.destroy();
   const days = lastN(all, 14);
   const labels = days.map((d) => d.date.slice(5));
-  const colors = { spiritual: '#c9a84c', health: '#4a9a6a', strategy: '#4a7ab0', financial: '#8a5ab0', enjoyment: '#c05050' };
+  const colors = { prerequisite: '#8a6820', spiritual: '#c05050', health: '#4a7ab0', strategy: '#c9a84c', financial: '#8a5ab0', enjoyment: '#4a9a6a' };
   const datasets = PILLARS.map((p) => ({
     label: p.name,
     data: days.map((d) => d.record ? pillarCompletion(d.record, p.id) : 0),
@@ -138,6 +138,20 @@ function renderCorrelationExplorer(parent, all) {
   const list = document.createElement('div');
   list.className = 'var-list';
   parent.appendChild(list);
+
+  const lagWrap = document.createElement('div');
+  lagWrap.className = 'lag-wrap';
+  lagWrap.innerHTML = `
+    <div class="lag-label">X-axis lag: <span id="lag-val">${_corrState.lag}</span> day${_corrState.lag === 1 ? '' : 's'}</div>
+    <input type="range" min="0" max="30" step="1" value="${_corrState.lag}" id="lag-input" class="slider-input" style="--c:#8a5ab0;">
+    <div class="muted" style="font-size:12px;">When > 0, X is taken from N days before each Y date — useful for "did sleep N days ago predict mood today?"</div>
+  `;
+  parent.appendChild(lagWrap);
+  lagWrap.querySelector('#lag-input').addEventListener('input', (e) => {
+    _corrState.lag = parseInt(e.target.value, 10);
+    lagWrap.querySelector('#lag-val').textContent = _corrState.lag;
+    recompute();
+  });
 
   const result = document.createElement('div');
   result.className = 'r-result';
@@ -225,7 +239,7 @@ function renderCorrelationExplorer(parent, all) {
       drawScatter([]);
       return;
     }
-    const pairs = buildPairs(all, xVars, yVars);
+    const pairs = buildPairs(all, xVars, yVars, _corrState.lag || 0);
     if (pairs.length < 5) {
       result.innerHTML = '<div class="r-text">Keep tracking — correlations appear after 5 days of data.</div>';
       drawScatter(pairs);

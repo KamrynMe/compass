@@ -11,9 +11,10 @@ async function renderSettingsView(container) {
   container.appendChild(header);
 
   const loc = (await getSetting('location')) || { lat: '', lon: '', label: '' };
-  const reminder = (await getSetting('reminderTime')) || '';
   const wakeT = (await getSetting('wakeTime')) || '05:00';
   const windT = (await getSetting('winddownTime')) || '19:00';
+  const reminder = (await getSetting('reminderTime')) || wakeT;
+  const lastExport = await getSetting('lastExportAt');
 
   const cardW = document.createElement('div');
   cardW.className = 'card';
@@ -22,11 +23,11 @@ async function renderSettingsView(container) {
     <div class="setting-help">Used by the daily score: checks earlier in your waking window earn up to 5×.</div>
     <div class="setting-row">
       <div class="setting-label">Wake Time</div>
-      <input class="input-text" type="time" id="wake-time" value="${wakeT}">
+      <input class="input-text" type="time" step="300" id="wake-time" value="${wakeT}">
     </div>
     <div class="setting-row">
       <div class="setting-label">Wind-Down Time</div>
-      <input class="input-text" type="time" id="wind-time" value="${windT}">
+      <input class="input-text" type="time" step="300" id="wind-time" value="${windT}">
     </div>
     <div class="row-buttons">
       <button class="btn-secondary" id="wake-default">Defaults (5am / 7pm)</button>
@@ -91,7 +92,7 @@ async function renderSettingsView(container) {
     <h3>Daily Reminder</h3>
     <div class="setting-help">Best-effort browser notification (limited on iOS PWAs).</div>
     <div class="setting-row">
-      <input class="input-text" type="time" id="rem-time" value="${reminder || ''}">
+      <input class="input-text" type="time" step="300" id="rem-time" value="${reminder || ''}">
     </div>
     <div class="row-buttons">
       <button class="btn-secondary" id="rem-perm">Enable Notifications</button>
@@ -113,8 +114,12 @@ async function renderSettingsView(container) {
 
   const card3 = document.createElement('div');
   card3.className = 'card';
+  const exportNote = lastExport
+    ? `Last exported ${new Date(lastExport).toLocaleDateString()}.`
+    : `<strong style="color:var(--e-color);">Never exported. Removing the home-screen icon will erase all your data — back up first.</strong>`;
   card3.innerHTML = `
     <h3>Data</h3>
+    <div class="setting-help" style="margin-bottom:8px;">${exportNote}</div>
     <div class="row-buttons">
       <button class="btn-secondary" id="data-export">Export JSON</button>
       <button class="btn-secondary" id="data-import">Import JSON</button>
@@ -134,6 +139,8 @@ async function renderSettingsView(container) {
     a.download = `compass-export-${todayISO()}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    await setSetting('lastExportAt', new Date().toISOString());
+    showToast('Exported');
   });
   const fileInput = card3.querySelector('#data-import-file');
   card3.querySelector('#data-import').addEventListener('click', () => fileInput.click());
@@ -181,7 +188,7 @@ async function renderSettingsView(container) {
   card4.className = 'card';
   card4.innerHTML = `
     <h3>About</h3>
-    <div class="setting-help">Compass — v1.0 — built ${new Date().toLocaleDateString()}.<br>All data lives only on this device. No accounts.</div>
+    <div class="setting-help">Compass — v1.0 — built ${new Date().toLocaleDateString()}.<br>Made by Cameron Thomas.<br>All data lives only on this device. No accounts.</div>
   `;
   container.appendChild(card4);
 }
@@ -195,11 +202,15 @@ async function renderCustomGoalsCard(container) {
   async function refresh() {
     const customs = await loadCustomGoals();
     const pillarOptions = PILLARS.map((p) => `<option value="${p.id}">${p.symbol} ${p.name}</option>`).join('');
-    const afterOptions = QUESTIONS.map((q, i) => {
-      const num = i + 1;
-      const label = `${num}. ${q.emoji || ''} ${q.text.slice(0, 50)}${q.text.length > 50 ? '…' : ''}`;
-      return `<option value="${q.id}">${escapeHtml(label)}</option>`;
-    }).join('');
+    const buildAfterOptionsHtml = (pillarId) => {
+      return QUESTIONS
+        .filter((q) => q.pillar === pillarId)
+        .map((q) => {
+          const num = displayNumberFor(q.id);
+          const label = `${num}. ${q.emoji || ''} ${q.text.slice(0, 50)}${q.text.length > 50 ? '…' : ''}`;
+          return `<option value="${q.id}">${escapeHtml(label)}</option>`;
+        }).join('');
+    };
 
     const editing = editingId ? customs.find((c) => c.id === editingId) : null;
 
@@ -236,7 +247,7 @@ async function renderCustomGoalsCard(container) {
             <select class="input-text" id="cg-pillar">${pillarOptions}</select>
           </label>
           <label class="setting-label" style="font-size:13px;">Insert after
-            <select class="input-text" id="cg-after">${afterOptions}</select>
+            <select class="input-text" id="cg-after">${buildAfterOptionsHtml(editing?.pillar || 'enjoyment')}</select>
           </label>
           <label class="setting-label" style="font-size:13px;display:flex;align-items:center;gap:8px;">
             <input type="checkbox" id="cg-anchor" ${editing?.anchor ? 'checked' : ''} style="width:24px;height:24px;">
@@ -257,6 +268,10 @@ async function renderCustomGoalsCard(container) {
     } else {
       card.querySelector('#cg-pillar').value = 'enjoyment';
     }
+    // Re-filter "insert after" when pillar changes.
+    card.querySelector('#cg-pillar').addEventListener('change', (e) => {
+      card.querySelector('#cg-after').innerHTML = buildAfterOptionsHtml(e.target.value);
+    });
 
     card.querySelectorAll('.custom-row').forEach((row) => {
       const id = row.dataset.id;

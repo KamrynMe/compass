@@ -39,7 +39,54 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (t) scheduleReminder(t);
   } catch (_) {}
   try { await loadSoundPref(); } catch (_) {}
+  try { await maybeShowBackupBanner(); } catch (_) {}
 });
+
+async function maybeShowBackupBanner() {
+  const days = await getAllDays();
+  if (!days.length) return;
+  const lastExport = await getSetting('lastExportAt');
+  const lastNag = await getSetting('lastBackupNagAt');
+  const now = Date.now();
+  const dayMs = 86400000;
+  const exportAgeDays = lastExport ? (now - new Date(lastExport).getTime()) / dayMs : Infinity;
+  const nagAgeDays = lastNag ? (now - new Date(lastNag).getTime()) / dayMs : Infinity;
+  // Nag if never exported AND there are 3+ days of data, or last export > 14 days ago.
+  // Don't nag more than once every 7 days.
+  const shouldNag = (exportAgeDays > 14 || (!lastExport && days.length >= 3)) && nagAgeDays > 7;
+  if (!shouldNag) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'backup-banner';
+  wrap.innerHTML = `
+    <div>
+      <strong>Back up your data.</strong>
+      <div style="font-size:13px;margin-top:2px;opacity:0.9;">Removing the home-screen icon erases everything. Export now to be safe.</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-shrink:0;">
+      <button class="btn-secondary" id="bk-later">Later</button>
+      <button class="btn-primary" id="bk-go">Export</button>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+  wrap.querySelector('#bk-later').addEventListener('click', async () => {
+    await setSetting('lastBackupNagAt', new Date().toISOString());
+    wrap.remove();
+  });
+  wrap.querySelector('#bk-go').addEventListener('click', async () => {
+    const data = await exportAll();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `compass-export-${todayISO()}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    await setSetting('lastExportAt', new Date().toISOString());
+    await setSetting('lastBackupNagAt', new Date().toISOString());
+    wrap.remove();
+    showToast('Exported');
+  });
+}
 
 function showToast(msg, ms = 2200) {
   const root = document.getElementById('toast-root');

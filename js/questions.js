@@ -17,7 +17,7 @@ const ORIGINAL_QUESTIONS = [
     note: 'Broadcasting, videos, personal study beyond meeting prep.' },
   { id: 'q5',  pillar: 'spiritual', anchor: false, emoji: '🧆', text: 'How can you make the congregation warmer?',
     note: 'One act of warmth — a text, a conversation, noticing someone.' },
-  { id: 'q6',  pillar: 'spiritual', anchor: false, emoji: '🗂️', text: 'How can you expand your preaching and teaching?',
+  { id: 'q6',  pillar: 'spiritual', anchor: true,  emoji: '🗂️', text: 'How can you expand your preaching and teaching?',
     note: 'Territory, return visits, informal witness.' },
   { id: 'q7',  pillar: 'spiritual', anchor: false, emoji: '🏔️', text: 'How can you support Jehovah in specialized ways?',
     note: 'LDC contribution, specialized assignments, kingdom hall care.' },
@@ -104,6 +104,33 @@ async function initQuestions() {
   rebuildQuestionsFrom(customs);
 }
 
+// Display number = 1-based index in current QUESTIONS order.
+function displayNumberFor(qid) {
+  const i = QUESTIONS.findIndex((q) => q.id === qid);
+  return i >= 0 ? i + 1 : null;
+}
+
+// Time (ms from now) until the next 1-point tick of multiplier change.
+// Multiplier formula: m = 1 + 4 * (remaining/total). One 0.01 step in m is
+// (total/400) seconds of remaining time. With a 14h waking window that's
+// 50,400/400 = 126 s ≈ 2 min 6 s.
+function msUntilNextScoreTick(wakeStr, windStr, dateISO) {
+  if (!wakeStr || !windStr) return null;
+  const [wH, wM] = wakeStr.split(':').map(Number);
+  const [dH, dM] = windStr.split(':').map(Number);
+  const base = new Date(dateISO + 'T00:00:00');
+  const wake = new Date(base); wake.setHours(wH, wM, 0, 0);
+  const wind = new Date(base); wind.setHours(dH, dM, 0, 0);
+  if (wind <= wake) wind.setDate(wind.getDate() + 1);
+  const total = (wind - wake) / 1000; // seconds
+  const stepSec = total / 400;
+  const now = Date.now();
+  const remaining = (wind - now) / 1000;
+  if (remaining <= 0 || total <= 0) return null;
+  const next = (remaining % stepSec) * 1000;
+  return Math.max(500, Math.round(next));
+}
+
 // Pillar order matches the habit-stack order above.
 const PILLARS = [
   { id: 'prerequisite', name: 'Prerequisite', symbol: '🛏️' },
@@ -149,11 +176,26 @@ async function recentCheckCounts(dateISO) {
 async function computeUnlockedSet(dateISO, counts) {
   const c = counts || (await recentCheckCounts(dateISO));
   const unlocked = new Set();
-  unlocked.add(QUESTIONS[0].id);
-  for (let i = 1; i < QUESTIONS.length; i++) {
-    const prev = QUESTIONS[i - 1];
-    if (c[prev.id] >= 5) unlocked.add(QUESTIONS[i].id);
-    else break;
+  // All prerequisite goals (original + custom) are always unlocked.
+  for (const q of QUESTIONS) {
+    if (q.pillar === 'prerequisite') unlocked.add(q.id);
+  }
+  // Stack chain across non-prerequisite goals in QUESTIONS order.
+  // First non-prereq is unlocked iff at least one prereq has 5/7. If no prereqs
+  // exist, it unlocks unconditionally.
+  let prevSatisfied = true;
+  const prereqs = QUESTIONS.filter((q) => q.pillar === 'prerequisite');
+  if (prereqs.length) {
+    prevSatisfied = prereqs.some((q) => (c[q.id] || 0) >= 5);
+  }
+  for (const q of QUESTIONS) {
+    if (q.pillar === 'prerequisite') continue;
+    if (prevSatisfied) {
+      unlocked.add(q.id);
+      prevSatisfied = (c[q.id] || 0) >= 5;
+    } else {
+      break;
+    }
   }
   return unlocked;
 }

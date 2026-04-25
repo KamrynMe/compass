@@ -1,8 +1,4 @@
-async function fetchWeather(lat, lon) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,apparent_temperature,precipitation&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=1`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Weather fetch failed');
-  const data = await res.json();
+function parseHourlyResponse(data) {
   const times = data.hourly.time;
   const temps = data.hourly.temperature_2m;
   const feels = data.hourly.apparent_temperature;
@@ -24,12 +20,55 @@ async function fetchWeather(lat, lon) {
   };
 }
 
+function todayLocalISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+async function fetchWeather(lat, lon, dateISO) {
+  const target = dateISO || todayLocalISO();
+  const isPast = target < todayLocalISO();
+  const isFuture = target > todayLocalISO();
+
+  // Forecast endpoint covers today and a few days back (past_days), plus future.
+  // Archive endpoint covers older dates (with a ~5 day delay).
+  const tryUrls = [];
+  if (!isPast) {
+    tryUrls.push(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,apparent_temperature,precipitation&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&start_date=${target}&end_date=${target}`);
+  } else {
+    // Try forecast with past_days first (covers up to ~92 days)
+    const daysBack = Math.min(92, Math.ceil((Date.now() - new Date(target + 'T00:00:00').getTime()) / 86400000));
+    tryUrls.push(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,apparent_temperature,precipitation&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&past_days=${daysBack}&forecast_days=1&start_date=${target}&end_date=${target}`);
+    // Then archive endpoint (works back to 1940)
+    tryUrls.push(`https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,apparent_temperature,precipitation&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&start_date=${target}&end_date=${target}`);
+  }
+  if (isFuture) throw new Error('Cannot fetch weather for future dates');
+
+  let lastErr = null;
+  for (const url of tryUrls) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) { lastErr = new Error('HTTP ' + res.status); continue; }
+      const data = await res.json();
+      if (!data.hourly || !data.hourly.time || data.hourly.time.length === 0) {
+        lastErr = new Error('No hourly data returned'); continue;
+      }
+      return parseHourlyResponse(data);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('Weather fetch failed');
+}
+
 async function getOrFetchWeatherForToday(record) {
   if (record.weather && record.weather.fetchedAt) return record.weather;
   const loc = await getSetting('location');
   if (!loc || loc.lat == null || loc.lon == null) {
-    throw new Error('No location set');
+    throw new Error('No location set — open Settings to add one.');
   }
-  const w = await fetchWeather(loc.lat, loc.lon);
-  return w;
+  return await fetchWeather(loc.lat, loc.lon, record.date);
 }
