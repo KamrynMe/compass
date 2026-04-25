@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Compass — Life Navigation Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inconsolata:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f4ee;
+    --bg2: #ede9e0;
+    --ink: #1a1612;
+    --ink2: #3a3228;
+    --ink3: #6a6050;
+    --rule: #ccc5b5;
+    --gold: #8a6820;
+    --gold-light: #b89040;
+    --s-color: #5a3e1b;
+    --s-bg: #fdf6e8;
+    --s-border: #c9a84c;
+    --h-color: #1b3a2a;
+    --h-bg: #eef7f1;
+    --h-border: #4a9a6a;
+    --st-color: #1b2e4a;
+    --st-bg: #eef2f9;
+    --st-border: #4a7ab0;
+    --f-color: #2e1b4a;
+    --f-bg: #f4eef9;
+    --f-border: #8a5ab0;
+    --e-color: #4a1b1b;
+    --e-bg: #fdf0f0;
+    --e-border: #c05050;
+    --check-off: #ccc5b5;
+    --check-on: #2a7a4a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inconsolata', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* Paper texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(0,0,0,0.03) 28px),
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 40px 80px;
+  }
+
+  /* Header */
+  .masthead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 20px;
+    margin-bottom: 36px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .masthead-title {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 36px;
+    font-weight: 400;
+    letter-spacing: -1px;
+    color: var(--ink);
+    line-height: 1;
+  }
+
+  .masthead-title span {
+    font-style: italic;
+    color: var(--gold);
+  }
+
+  .masthead-sub {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--ink3);
+    margin-top: 6px;
+  }
+
+  .date-stamp {
+    text-align: right;
+    font-size: 11px;
+    color: var(--ink3);
+    line-height: 1.8;
+  }
+
+  .week-display {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 14px;
+    color: var(--ink2);
+  }
+
+  /* Week nav */
+  .week-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+
+  .week-nav-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ink3);
+    flex-shrink: 0;
+  }
+
+  .day-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .day-tab {
+    padding: 5px 12px;
+    font-family: 'Inconsolata', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--ink3);
+    cursor: pointer;
+    transition: all 0.15s;
+    border-radius: 1px;
+  }
+
+  .day-tab:hover { background: var(--bg2); color: var(--ink); }
+  .day-tab.active {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+  }
+
+  .progress-bar {
+    flex: 1;
+    height: 3px;
+    background: var(--rule);
+    border-radius: 2px;
+    min-width: 80px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold), var(--gold-light));
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  .progress-label {
+    font-size: 10px;
+    color: var(--ink3);
+    white-space: nowrap;
+  }
+
+  /* Pillars */
+  .pillars {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .pillar {
+    border: 1px solid var(--rule);
+    background: white;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+  }
+
+  .pillar:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+
+  .pillar-head {
+    padding: 14px 18px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--rule);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .pillar-head-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .pillar-icon {
+    width: 32px; height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    border-radius: 2px;
+  }
+
+  .pillar-name {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 16px;
+    font-weight: 400;
+  }
+
+  .pillar-count {
+    font-size: 10px;
+    color: var(--ink3);
+    font-family: 'Inconsolata', monospace;
+    margin-top: 1px;
+  }
+
+  .pillar-toggle {
+    font-size: 10px;
+    color: var(--ink3);
+    letter-spacing: 1px;
+    transition: transform 0.2s;
+  }
+
+  .pillar.collapsed .pillar-toggle { transform: rotate(-90deg); }
+
+  .pillar-body {
+    padding: 0;
+    overflow: hidden;
+    max-height: 2000px;
+    transition: max-height 0.4s ease;
+  }
+
+  .pillar.collapsed .pillar-body {
+    max-height: 0;
+  }
+
+  /* Spiritual */
+  .pillar.spiritual .pillar-head { background: var(--s-bg); border-bottom-color: var(--s-border); }
+  .pillar.spiritual .pillar-name { color: var(--s-color); }
+  .pillar.spiritual .pillar-icon { background: #fdecc8; }
+  .pillar.spiritual .check-item:checked + .check-label::before { background: var(--s-border); border-color: var(--s-border); }
+
+  /* Health */
+  .pillar.health .pillar-head { background: var(--h-bg); border-bottom-color: var(--h-border); }
+  .pillar.health .pillar-name { color: var(--h-color); }
+  .pillar.health .pillar-icon { background: #d4f0e0; }
+  .pillar.health .check-item:checked + .check-label::before { background: var(--h-border); border-color: var(--h-border); }
+
+  /* Strategy */
+  .pillar.strategy .pillar-head { background: var(--st-bg); border-bottom-color: var(--st-border); }
+  .pillar.strategy .pillar-name { color: var(--st-color); }
+  .pillar.strategy .pillar-icon { background: #d0e4f4; }
+  .pillar.strategy .check-item:checked + .check-label::before { background: var(--st-border); border-color: var(--st-border); }
+
+  /* Finance */
+  .pillar.finance .pillar-head { background: var(--f-bg); border-bottom-color: var(--f-border); }
+  .pillar.finance .pillar-name { color: var(--f-color); }
+  .pillar.finance .pillar-icon { background: #e4d4f4; }
+  .pillar.finance .check-item:checked + .check-label::before { background: var(--f-border); border-color: var(--f-border); }
+
+  /* Enjoyment */
+  .pillar.enjoyment .pillar-head { background: var(--e-bg); border-bottom-color: var(--e-border); }
+  .pillar.enjoyment .pillar-name { color: var(--e-color); }
+  .pillar.enjoyment .pillar-icon { background: #f4d4d4; }
+  .pillar.enjoyment .check-item:checked + .check-label::before { background: var(--e-border); border-color: var(--e-border); }
+
+  /* Questions */
+  .question-group {
+    padding: 14px 18px;
+    border-bottom: 1px solid #f0ece4;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .question-group:last-child { border-bottom: none; }
+
+  .check-item {
+    display: none;
+  }
+
+  .check-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  .check-label::before {
+    content: '';
+    flex-shrink: 0;
+    width: 16px; height: 16px;
+    margin-top: 1px;
+    border: 1.5px solid var(--rule);
+    border-radius: 1px;
+    background: transparent;
+    transition: all 0.15s;
+  }
+
+  .check-item:checked + .check-label {
+    opacity: 0.5;
+  }
+
+  .check-item:checked + .check-label::before {
+    content: '✓';
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: white;
+    font-weight: bold;
+  }
+
+  .check-item:checked + .check-label .q-text {
+    text-decoration: line-through;
+  }
+
+  .q-content { flex: 1; }
+
+  .q-text {
+    font-size: 12.5px;
+    color: var(--ink2);
+    line-height: 1.5;
+    font-style: italic;
+    font-family: 'Libre Baskerville', serif;
+    font-weight: 400;
+  }
+
+  .q-note {
+    font-size: 10px;
+    color: var(--ink3);
+    margin-top: 4px;
+    font-family: 'Inconsolata', monospace;
+    letter-spacing: 0.3px;
+  }
+
+  .q-anchor {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--ink3);
+    opacity: 0.5;
+    margin-top: 3px;
+    font-family: 'Inconsolata', monospace;
+  }
+
+  /* Star badge */
+  .star-badge {
+    display: inline-block;
+    font-size: 8px;
+    padding: 1px 5px;
+    border-radius: 1px;
+    background: #fdecc8;
+    color: var(--gold);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-left: 6px;
+    vertical-align: middle;
+    font-family: 'Inconsolata', monospace;
+    font-style: normal;
+  }
+
+  /* Notes area */
+  .notes-section {
+    margin-top: 28px;
+    border: 1px solid var(--rule);
+    background: white;
+  }
+
+  .notes-head {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .notes-title {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 14px;
+    color: var(--ink2);
+    font-style: italic;
+  }
+
+  .notes-clear {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--ink3);
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: 'Inconsolata', monospace;
+  }
+
+  .notes-clear:hover { color: var(--e-color); }
+
+  textarea {
+    width: 100%;
+    padding: 16px 18px;
+    border: none;
+    background: transparent;
+    resize: vertical;
+    font-family: 'Inconsolata', monospace;
+    font-size: 12px;
+    color: var(--ink2);
+    line-height: 1.8;
+    min-height: 120px;
+    outline: none;
+  }
+
+  textarea::placeholder { color: var(--rule); }
+
+  /* Reset / summary bar */
+  .control-bar {
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .summary-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 1px;
+    letter-spacing: 1px;
+    font-family: 'Inconsolata', monospace;
+    text-transform: uppercase;
+  }
+
+  .chip.spiritual { background: var(--s-bg); color: var(--s-color); border: 1px solid var(--s-border); }
+  .chip.health    { background: var(--h-bg); color: var(--h-color); border: 1px solid var(--h-border); }
+  .chip.strategy  { background: var(--st-bg); color: var(--st-color); border: 1px solid var(--st-border); }
+  .chip.finance   { background: var(--f-bg); color: var(--f-color); border: 1px solid var(--f-border); }
+  .chip.enjoyment { background: var(--e-bg); color: var(--e-color); border: 1px solid var(--e-border); }
+
+  .btn-reset {
+    font-size: 10px;
+    padding: 7px 18px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border: 1px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    font-family: 'Inconsolata', monospace;
+    transition: all 0.15s;
+  }
+
+  .btn-reset:hover { background: var(--ink); color: var(--bg); }
+
+  /* Full-width pillar override */
+  .pillar.full-width {
+    grid-column: 1 / -1;
+  }
+
+  .section-divider {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 4px 0;
+  }
+
+  .section-divider span {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--ink3);
+    white-space: nowrap;
+  }
+
+  .section-divider::before, .section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  @media (max-width: 640px) {
+    .pillars { grid-template-columns: 1fr; }
+    .page { padding: 24px 16px 60px; }
+    .masthead-title { font-size: 26px; }
+    .pillar.full-width { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="masthead">
+    <div>
+      <h1 class="masthead-title">The <span>Compass</span></h1>
+      <p class="masthead-sub">Weekly Navigation Guide — All Five Pillars</p>
+    </div>
+    <div class="date-stamp">
+      <div class="week-display" id="weekDisplay">—</div>
+      <div id="dateDisplay" style="font-size:11px;color:var(--ink3);margin-top:2px;"></div>
+    </div>
+  </div>
+
+  <!-- Day tabs + progress -->
+  <div class="week-nav">
+    <span class="week-nav-label">Day —</span>
+    <div class="day-tabs" id="dayTabs">
+      <button class="day-tab active" data-day="sun">Sun</button>
+      <button class="day-tab" data-day="mon">Mon</button>
+      <button class="day-tab" data-day="tue">Tue</button>
+      <button class="day-tab" data-day="wed">Wed</button>
+      <button class="day-tab" data-day="thu">Thu</button>
+      <button class="day-tab" data-day="fri">Fri</button>
+      <button class="day-tab" data-day="sat">Sat</button>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <span class="progress-label" id="progressLabel">0 / 0</span>
+  </div>
+
+  <!-- Pillars grid -->
+  <div class="pillars">
+
+    <!-- SPIRITUAL -->
+    <div class="pillar spiritual full-width" id="pillar-spiritual">
+      <div class="pillar-head" onclick="togglePillar('spiritual')">
+        <div class="pillar-head-left">
+          <div class="pillar-icon">✦</div>
+          <div>
+            <div class="pillar-name">Spiritual</div>
+            <div class="pillar-count" id="count-spiritual">0 / 7 answered</div>
+          </div>
+        </div>
+        <div class="pillar-toggle">▾</div>
+      </div>
+      <div class="pillar-body" id="body-spiritual">
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="s1">
+          <label class="check-label" for="s1">
+            <div class="q-content">
+              <div class="q-text">Did you do the text? <span class="star-badge">⭐ anchor</span></div>
+              <div class="q-note">Daily Text read, meditated on, and applied to today's outlook.</div>
+              <div class="q-anchor">→ Daily Text · Meditation & Application</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="s2">
+          <label class="check-label" for="s2">
+            <div class="q-content">
+              <div class="q-text">Did you read and meditate on meeting preparation? <span class="star-badge">⭐ anchor</span></div>
+              <div class="q-note">Watchtower (Sun), CBS (Thu), CLAM (Tue) — whichever is next. Underline. Think. Prepare an answer.</div>
+              <div class="q-anchor">→ Watchtower · CBS · CLAM · Personal Study</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="s3">
+          <label class="check-label" for="s3">
+            <div class="q-content">
+              <div class="q-text">How can you care for your necessary familial relationships?</div>
+              <div class="q-note">Your wife, your household, your inner circle. One intentional act of presence today.</div>
+              <div class="q-anchor">→ Fathering & Husbanding · Family Worship & Prep · Sustaining Relationships</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="s4">
+          <label class="check-label" for="s4">
+            <div class="q-content">
+              <div class="q-text">What supplementary studying is available?</div>
+              <div class="q-note">Broadcasting, videos, personal study beyond meeting prep. What's queued? What feeds your current theme?</div>
+              <div class="q-anchor">→ Broadcasting & Vids · Personal Study · Bible Reading</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="s5">
+          <label class="check-label" for="s5">
+            <div class="q-content">
+              <div class="q-text">How can you make the congregation warmer?</div>
+              <div class="q-note">One act of warmth — a text, a conversation, noticing someone. Internal ministry is presence, not program.</div>
+              <div class="q-anchor">→ Internal Ministry · Sustaining & Caring for Existing Relationships</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="s6">
+          <label class="check-label" for="s6">
+            <div class="q-content">
+              <div class="q-text">How can you expand your preaching and teaching?</div>
+              <div class="q-note">Territory, return visits, informal witness, integration of internal and external outreach.</div>
+              <div class="q-anchor">→ External Ministry · Internal/External Integration · Ministry Availability Expansion</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="s7">
+          <label class="check-label" for="s7">
+            <div class="q-content">
+              <div class="q-text">How can you support Jehovah in specialized ways?</div>
+              <div class="q-note">LDC contribution, specialized assignments, kingdom hall care. What's the next concrete action?</div>
+              <div class="q-anchor">→ LDC · Internal Ministry Availability Expansion</div>
+            </div>
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- HEALTH -->
+    <div class="pillar health" id="pillar-health">
+      <div class="pillar-head" onclick="togglePillar('health')">
+        <div class="pillar-head-left">
+          <div class="pillar-icon">◈</div>
+          <div>
+            <div class="pillar-name">Health</div>
+            <div class="pillar-count" id="count-health">0 / 3 answered</div>
+          </div>
+        </div>
+        <div class="pillar-toggle">▾</div>
+      </div>
+      <div class="pillar-body" id="body-health">
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="h1">
+          <label class="check-label" for="h1">
+            <div class="q-content">
+              <div class="q-text">Did you seal off, prime, and protect your sleep window? <span class="star-badge">⭐ anchor</span></div>
+              <div class="q-note">Melatonin timed. Light environment managed. Physical aids in place. Emotionally wound down. Screen-off enforced.</div>
+              <div class="q-anchor">→ Melatonin Ingestion & State Protection · Physical Sleep Aid · Sleep & Delta</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="h2">
+          <label class="check-label" for="h2">
+            <div class="q-content">
+              <div class="q-text">Are you eating healthily? <span class="star-badge">⭐ anchor</span></div>
+              <div class="q-note">Huel + Berries as your daily base. Fasted window honored. Gut health supported. Inflammation-aware choices.</div>
+              <div class="q-anchor">→ Huel + Berries · Nutrition · Gut 2nd Brain · Inflammation Management · Fasted Autophagy</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="h3">
+          <label class="check-label" for="h3">
+            <div class="q-content">
+              <div class="q-text">Are you getting stronger and more capable? <span class="star-badge">⭐ anchor</span></div>
+              <div class="q-note">Physical training completed. Hot/cold exposure used. Body is being built for longevity, not just performance.</div>
+              <div class="q-anchor">→ Fitness & Athleticism · Capableness · Hot & Cold Exposure</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="h4">
+          <label class="check-label" for="h4">
+            <div class="q-content">
+              <div class="q-text">Neurogenesis, Stem cells, Telomeres, Mitochondria, Inflammation, Autophagy.</div>
+              <div class="q-note">Are your longevity protocols active this week? Stacking behaviors: fasting, cold, movement, sleep, nutrition. Each one compounds.</div>
+              <div class="q-anchor">→ Neurogenesis · Stem Cells & Telomeres · Mitochondria · Inflammation · Fasted Autophagy</div>
+            </div>
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- STRATEGY -->
+    <div class="pillar strategy" id="pillar-strategy">
+      <div class="pillar-head" onclick="togglePillar('strategy')">
+        <div class="pillar-head-left">
+          <div class="pillar-icon">◎</div>
+          <div>
+            <div class="pillar-name">Strategy</div>
+            <div class="pillar-count" id="count-strategy">0 / 5 answered</div>
+          </div>
+        </div>
+        <div class="pillar-toggle">▾</div>
+      </div>
+      <div class="pillar-body" id="body-strategy">
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="st1">
+          <label class="check-label" for="st1">
+            <div class="q-content">
+              <div class="q-text">Organized systems to automate days and weeks — preparation for alpha flow state? <span class="star-badge">⭐ anchor</span></div>
+              <div class="q-note">Is tomorrow's environment already set? Tasks staged. Friction removed. The work should be able to begin without thought.</div>
+              <div class="q-anchor">→ Systems & Organization · Prepare for Next Day & Week · Alpha Protection & Flow</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="st2">
+          <label class="check-label" for="st2">
+            <div class="q-content">
+              <div class="q-text">Time allocated for Gamma schedule scrutinization for improvement?</div>
+              <div class="q-note">Weekly: zoom out and audit the structure. What's misaligned? What's costing more than it gives? What should shift?</div>
+              <div class="q-anchor">→ Gamma Solving & Planning · Systems & Organization</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="st3">
+          <label class="check-label" for="st3">
+            <div class="q-content">
+              <div class="q-text">Protected space and time for Theta gratitude and visualization?</div>
+              <div class="q-note">A quiet, unscheduled window. No tasks. Let the mind drift into image, feel, and gratitude. This is creative fuel, not laziness.</div>
+              <div class="q-anchor">→ Theta Imagining & Absorbing · Protected Privacy Peace</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="st4">
+          <label class="check-label" for="st4">
+            <div class="q-content">
+              <div class="q-text">Does Beta have a job this week?</div>
+              <div class="q-note">Beta (reactive, managing mode) should be assigned specific slots — admin, comms, logistics. Keep it bounded so it doesn't colonize Alpha time.</div>
+              <div class="q-anchor">→ Beta Management & Allocation · Systems & Organization</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="st5">
+          <label class="check-label" for="st5">
+            <div class="q-content">
+              <div class="q-text">Music set aside to support all modes?</div>
+              <div class="q-note">Alpha playlist ready. Theta/ambient queued. Emotionally congruent sound for each state. Audio environment is architecture.</div>
+              <div class="q-anchor">→ Emotionally Congruent Auditory Environment · Master Music</div>
+            </div>
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- FINANCE -->
+    <div class="pillar finance" id="pillar-finance">
+      <div class="pillar-head" onclick="togglePillar('finance')">
+        <div class="pillar-head-left">
+          <div class="pillar-icon">◇</div>
+          <div>
+            <div class="pillar-name">Financial</div>
+            <div class="pillar-count" id="count-finance">0 / 2 answered</div>
+          </div>
+        </div>
+        <div class="pillar-toggle">▾</div>
+      </div>
+      <div class="pillar-body" id="body-finance">
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="f1">
+          <label class="check-label" for="f1">
+            <div class="q-content">
+              <div class="q-text">Psychology hitting the mark in real life practice? <span class="star-badge">⭐ anchor</span></div>
+              <div class="q-note">The theory you know — is it showing up in how you write, speak, position, and frame? Name one place this week where it landed.</div>
+              <div class="q-anchor">→ Psychological Marketing</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="f2">
+          <label class="check-label" for="f2">
+            <div class="q-content">
+              <div class="q-text">Is what can be reliably automated, automated?</div>
+              <div class="q-note">Any task you've done manually three times can probably be automated. What's the one system to build or refine this week?</div>
+              <div class="q-anchor">→ Business & Automation · Systems & Organization</div>
+            </div>
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ENJOYMENT -->
+    <div class="pillar enjoyment full-width" id="pillar-enjoyment">
+      <div class="pillar-head" onclick="togglePillar('enjoyment')">
+        <div class="pillar-head-left">
+          <div class="pillar-icon">◉</div>
+          <div>
+            <div class="pillar-name">Enjoyment & Giving</div>
+            <div class="pillar-count" id="count-enjoyment">0 / 8 answered</div>
+          </div>
+        </div>
+        <div class="pillar-toggle">▾</div>
+      </div>
+      <div class="pillar-body" id="body-enjoyment">
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="e1">
+          <label class="check-label" for="e1">
+            <div class="q-content">
+              <div class="q-text">How can I be a good friend to two people this week?</div>
+              <div class="q-note">Name the two people. One specific act each. Listening is usually worth more than advice.</div>
+              <div class="q-anchor">→ Listening & Empathy · Nuanced Advice · Helping & Giving</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="e2">
+          <label class="check-label" for="e2">
+            <div class="q-content">
+              <div class="q-text">How can I connect with what Jehovah created this week?</div>
+              <div class="q-note">Outside. Sky, water, trees, animals, soil. Not as exercise — as appreciation. Even 15 minutes with full attention.</div>
+              <div class="q-anchor">→ Nature & Animals</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="e3">
+          <label class="check-label" for="e3">
+            <div class="q-content">
+              <div class="q-text">How can I strengthen my logical strategic muscle under fun, safe conditions?</div>
+              <div class="q-note">Chess, puzzles, games, thought experiments — anything that bends the mind without pressure. Skill in play transfers to skill in work.</div>
+              <div class="q-anchor">→ Logic & Strategy</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="e4">
+          <label class="check-label" for="e4">
+            <div class="q-content">
+              <div class="q-text">How can I create fun situations for new people?</div>
+              <div class="q-note">Set up a context, not a conversation. An activity, a setting, an invitation. You're a curator of experiences.</div>
+              <div class="q-anchor">→ Meeting New People</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="e5">
+          <label class="check-label" for="e5">
+            <div class="q-content">
+              <div class="q-text">How can I be comfortable, myself, and spontaneous?</div>
+              <div class="q-note">Leave one window truly open this week — no plan, no agenda. Let something happen. This is the antidote to over-optimization.</div>
+              <div class="q-anchor">→ Spontaneous</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="e6">
+          <label class="check-label" for="e6">
+            <div class="q-content">
+              <div class="q-text">How can I build something soon?</div>
+              <div class="q-note">Physical, digital, or conceptual. Something that didn't exist, made by your hands or mind. Schedule it. Even an hour.</div>
+              <div class="q-anchor">→ Building & Construction</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="e7">
+          <label class="check-label" for="e7">
+            <div class="q-content">
+              <div class="q-text">How can I learn about physics soon?</div>
+              <div class="q-note">One concept. One video. One thought experiment about how reality works at its edges. Quantum and relativity reward slow curiosity.</div>
+              <div class="q-anchor">→ Quantum Relativity</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="question-group">
+          <input class="check-item" type="checkbox" id="e8">
+          <label class="check-label" for="e8">
+            <div class="q-content">
+              <div class="q-text">When can I learn about music, so I can eventually make it?</div>
+              <div class="q-note">Theory, ear training, a song studied deeply, an instrument touched. The goal is making — learning is the path. Book the time.</div>
+              <div class="q-anchor">→ Master Music</div>
+            </div>
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Notes -->
+  <div class="notes-section">
+    <div class="notes-head">
+      <span class="notes-title">This week's intentions & answers</span>
+      <button class="notes-clear" onclick="clearNotes()">clear</button>
+    </div>
+    <textarea id="weekNotes" placeholder="Write your specific answers here... Who are the two friends? What's the one automation to build? What's the meeting prep insight from today's text?&#10;&#10;This page is yours." oninput="saveNotes()"></textarea>
+  </div>
+
+  <!-- Controls -->
+  <div class="control-bar">
+    <div class="summary-chips">
+      <span class="chip spiritual" id="chip-spiritual">Spiritual 0/7</span>
+      <span class="chip health" id="chip-health">Health 0/4</span>
+      <span class="chip strategy" id="chip-strategy">Strategy 0/5</span>
+      <span class="chip finance" id="chip-finance">Finance 0/2</span>
+      <span class="chip enjoyment" id="chip-enjoyment">Enjoyment 0/8</span>
+    </div>
+    <button class="btn-reset" onclick="resetAll()">Reset Day</button>
+  </div>
+
+</div>
+
+<script>
+  // State
+  const PILLARS = {
+    spiritual: { questions: ['s1','s2','s3','s4','s5','s6','s7'], total: 7 },
+    health:    { questions: ['h1','h2','h3','h4'], total: 4 },
+    strategy:  { questions: ['st1','st2','st3','st4','st5'], total: 5 },
+    finance:   { questions: ['f1','f2'], total: 2 },
+    enjoyment: { questions: ['e1','e2','e3','e4','e5','e6','e7','e8'], total: 8 }
+  };
+
+  const DAYS = ['sun','mon','tue','wed','thu','fri','sat'];
+  const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  let currentDay = DAYS[new Date().getDay()];
+
+  // Init date
+  function initDate() {
+    const now = new Date();
+    const options = { weekday: 'long', month: 'long', day: 'numeric' };
+    document.getElementById('dateDisplay').textContent = now.toLocaleDateString('en-US', options);
+    document.getElementById('weekDisplay').textContent = 'Week of ' + getWeekStart();
+    // Activate current day tab
+    document.querySelectorAll('.day-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.day === currentDay);
+    });
+  }
+
+  function getWeekStart() {
+    const now = new Date();
+    const day = now.getDay();
+    const start = new Date(now);
+    start.setDate(now.getDate() - day);
+    return start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  // Day switching
+  document.getElementById('dayTabs').addEventListener('click', e => {
+    if (!e.target.classList.contains('day-tab')) return;
+    saveState();
+    currentDay = e.target.dataset.day;
+    document.querySelectorAll('.day-tab').forEach(t => t.classList.remove('active'));
+    e.target.classList.add('active');
+    loadState();
+  });
+
+  // Checkbox listeners
+  Object.values(PILLARS).forEach(p => {
+    p.questions.forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        saveState();
+        updateCounts();
+      });
+    });
+  });
+
+  // Toggle pillar collapse
+  function togglePillar(name) {
+    document.getElementById('pillar-' + name).classList.toggle('collapsed');
+  }
+
+  // Update all counts and progress
+  function updateCounts() {
+    let totalDone = 0, totalAll = 0;
+    Object.entries(PILLARS).forEach(([name, p]) => {
+      const done = p.questions.filter(id => document.getElementById(id).checked).length;
+      document.getElementById('count-' + name).textContent = done + ' / ' + p.total + ' answered';
+      document.getElementById('chip-' + name).textContent =
+        name.charAt(0).toUpperCase() + name.slice(1) + ' ' + done + '/' + p.total;
+      totalDone += done;
+      totalAll += p.total;
+    });
+    const pct = totalAll ? Math.round((totalDone / totalAll) * 100) : 0;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = totalDone + ' / ' + totalAll;
+  }
+
+  // Persistence (sessionStorage per day)
+  function stateKey() { return 'compass_' + currentDay; }
+  function notesKey() { return 'compass_notes_' + currentDay; }
+
+  function saveState() {
+    const state = {};
+    Object.values(PILLARS).forEach(p => {
+      p.questions.forEach(id => {
+        state[id] = document.getElementById(id).checked;
+      });
+    });
+    sessionStorage.setItem(stateKey(), JSON.stringify(state));
+  }
+
+  function loadState() {
+    const raw = sessionStorage.getItem(stateKey());
+    const state = raw ? JSON.parse(raw) : {};
+    Object.values(PILLARS).forEach(p => {
+      p.questions.forEach(id => {
+        document.getElementById(id).checked = state[id] || false;
+      });
+    });
+    const notes = sessionStorage.getItem(notesKey()) || '';
+    document.getElementById('weekNotes').value = notes;
+    updateCounts();
+  }
+
+  function saveNotes() {
+    sessionStorage.setItem(notesKey(), document.getElementById('weekNotes').value);
+  }
+
+  function clearNotes() {
+    document.getElementById('weekNotes').value = '';
+    sessionStorage.removeItem(notesKey());
+  }
+
+  function resetAll() {
+    Object.values(PILLARS).forEach(p => {
+      p.questions.forEach(id => { document.getElementById(id).checked = false; });
+    });
+    sessionStorage.removeItem(stateKey());
+    updateCounts();
+  }
+
+  // Boot
+  initDate();
+  loadState();
+</script>
+</body>
+</html>
