@@ -1,6 +1,7 @@
-// Questions in their habit-stack order. Each question's unlock depends on the prior one.
+// Original 26 questions in their habit-stack order. Always present, never removed.
 // IDs stay stable (q1..q26) so saved data + correlation explorer keep working.
-const QUESTIONS = [
+// Custom user goals are merged into QUESTIONS at runtime via rebuildQuestions().
+const ORIGINAL_QUESTIONS = [
   // PREREQUISITE
   { id: 'q8',  pillar: 'prerequisite', anchor: true,  emoji: '🛏️', text: 'Did you seal off, prime, and protect your sleep window?',
     note: 'Melatonin, light, wind-down.' },
@@ -66,6 +67,43 @@ const QUESTIONS = [
     note: 'Theory, ear training. Learning is the path.' },
 ];
 
+// Live, mutable list. Starts as a copy of ORIGINAL_QUESTIONS; rebuilt with customs at boot.
+const QUESTIONS = ORIGINAL_QUESTIONS.map((q) => ({ ...q, original: true }));
+
+async function loadCustomGoals() {
+  return (await getSetting('customGoals')) || [];
+}
+
+async function saveCustomGoals(list) {
+  await setSetting('customGoals', list);
+}
+
+// Rebuild QUESTIONS in place: originals first, then insert each custom after its anchor.
+function rebuildQuestionsFrom(customs) {
+  const list = ORIGINAL_QUESTIONS.map((q) => ({ ...q, original: true }));
+  const remaining = [...customs];
+  let safety = remaining.length * 4 + 4;
+  while (remaining.length && safety-- > 0) {
+    const c = remaining.shift();
+    const idx = c.afterId ? list.findIndex((q) => q.id === c.afterId) : -1;
+    if (idx >= 0) {
+      list.splice(idx + 1, 0, { ...c, custom: true });
+    } else if (!c.afterId) {
+      list.push({ ...c, custom: true });
+    } else {
+      remaining.push(c);
+    }
+  }
+  for (const c of remaining) list.push({ ...c, custom: true });
+  QUESTIONS.length = 0;
+  for (const q of list) QUESTIONS.push(q);
+}
+
+async function initQuestions() {
+  const customs = await loadCustomGoals();
+  rebuildQuestionsFrom(customs);
+}
+
 // Pillar order matches the habit-stack order above.
 const PILLARS = [
   { id: 'prerequisite', name: 'Prerequisite', symbol: '🛏️' },
@@ -91,14 +129,13 @@ const SLIDERS = [
 // A habit is unlocked when its predecessor in QUESTIONS order has been checked
 // at least 5 times in the previous 7 days (not counting today). The first habit
 // is always unlocked.
-// Returns { qid: count_in_last_7_days_ending_day_before_dateISO }
+// Returns { qid: count_in_last_7_days_INCLUDING dateISO }
 async function recentCheckCounts(dateISO) {
   const endDate = new Date(dateISO + 'T00:00:00');
   const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - 7);
+  startDate.setDate(startDate.getDate() - 6); // 7 days inclusive of dateISO
   const startISO = startDate.toISOString().slice(0, 10);
-  const prevISO = new Date(endDate.getTime() - 86400000).toISOString().slice(0, 10);
-  const recent = await getDaysInRange(startISO, prevISO);
+  const recent = await getDaysInRange(startISO, dateISO);
   const counts = {};
   for (const q of QUESTIONS) counts[q.id] = 0;
   for (const r of recent) {
@@ -140,6 +177,15 @@ function scoreMultiplierFor(checkTime, wakeStr, winddownStr, dateISO) {
   if (t < wake.getTime()) return 5; // checked before wake — give max
   const frac = Math.max(0, Math.min(1, remaining / total));
   return 1 + 4 * frac;
+}
+
+// Points earned by a single check given its checkedAt timestamp.
+async function pointsForCheck(record, qid) {
+  const qr = record?.questions?.[qid];
+  if (!qr || !qr.checked || !qr.checkedAt) return 0;
+  const wake = (await getSetting('wakeTime')) || '05:00';
+  const wind = (await getSetting('winddownTime')) || '19:00';
+  return Math.round(100 * scoreMultiplierFor(qr.checkedAt, wake, wind, record.date));
 }
 
 // Score for one record. Each checked habit contributes 100 * multiplier.

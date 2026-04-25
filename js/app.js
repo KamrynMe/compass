@@ -30,6 +30,7 @@ async function navigate() {
 window.addEventListener('hashchange', navigate);
 window.addEventListener('DOMContentLoaded', async () => {
   if (!location.hash) location.hash = '#today';
+  try { await initQuestions(); } catch (_) {}
   navigate();
 
   // Re-arm reminder if set

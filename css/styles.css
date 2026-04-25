@@ -724,6 +724,30 @@ button { cursor: pointer; touch-action: manipulation; }
   100% { background: transparent; }
 }
 .q.row-flash { animation: row-flash-kf 0.7s ease-out; }
+
+/* Floating "+points" popup */
+.q { position: relative; }
+.points-pop {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  background: #1b6b3a;
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  pointer-events: none;
+  animation: points-fly 1.4s ease-out forwards;
+  box-shadow: 0 2px 8px rgba(27,107,58,0.35);
+  z-index: 5;
+}
+@keyframes points-fly {
+  0%   { transform: translateY(0)   scale(0.7); opacity: 0; }
+  15%  { transform: translateY(-4px) scale(1.05); opacity: 1; }
+  70%  { transform: translateY(-22px) scale(1);   opacity: 1; }
+  100% { transform: translateY(-44px) scale(0.95); opacity: 0; }
+}
 .q-check:checked { transition: background 0.15s, border-color 0.15s; }
 
 /* Beats view */
@@ -749,6 +773,13 @@ button { cursor: pointer; touch-action: manipulation; }
 .beat-name { font-size: 17px; font-weight: 700; color: var(--wc, var(--ink)); }
 .beat-range { font-size: 12px; color: var(--ink3); margin-top: 2px; font-weight: 600; }
 .beat-use { font-size: 13px; color: var(--ink2); margin-top: 6px; line-height: 1.4; }
+
+.custom-row {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 10px 12px;
+}
+.custom-row .var-btn { min-height: 36px; }
 
 /* Prerequisite pillar styling */
 .pillar.prerequisite .pillar-head { background: #f0e8d6; border-bottom: 1px solid var(--gold-deep); }

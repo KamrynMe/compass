@@ -175,6 +175,8 @@ async function renderSettingsView(container) {
     showToast(e.target.checked ? 'Sounds on' : 'Sounds off');
   });
 
+  await renderCustomGoalsCard(container);
+
   const card4 = document.createElement('div');
   card4.className = 'card';
   card4.innerHTML = `
@@ -182,6 +184,124 @@ async function renderSettingsView(container) {
     <div class="setting-help">Compass — v1.0 — built ${new Date().toLocaleDateString()}.<br>All data lives only on this device. No accounts.</div>
   `;
   container.appendChild(card4);
+}
+
+async function renderCustomGoalsCard(container) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  container.appendChild(card);
+  let editingId = null;
+
+  async function refresh() {
+    const customs = await loadCustomGoals();
+    const pillarOptions = PILLARS.map((p) => `<option value="${p.id}">${p.symbol} ${p.name}</option>`).join('');
+    const afterOptions = QUESTIONS.map((q, i) => {
+      const num = i + 1;
+      const label = `${num}. ${q.emoji || ''} ${q.text.slice(0, 50)}${q.text.length > 50 ? '…' : ''}`;
+      return `<option value="${q.id}">${escapeHtml(label)}</option>`;
+    }).join('');
+
+    const editing = editingId ? customs.find((c) => c.id === editingId) : null;
+
+    const listHtml = customs.length === 0
+      ? '<div class="muted" style="font-size:14px;padding:8px 0;">No custom goals yet.</div>'
+      : customs.map((c) => `
+          <div class="custom-row" data-id="${c.id}">
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:600;font-size:15px;">${escapeHtml(c.emoji || '🎯')} ${escapeHtml(c.text)}</div>
+              <div class="muted" style="font-size:12px;">After ${escapeHtml(QUESTIONS.find((q) => q.id === c.afterId)?.text?.slice(0, 40) || '—')}…</div>
+            </div>
+            <button class="var-btn" data-act="edit">Edit</button>
+            <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">Delete</button>
+          </div>
+        `).join('');
+
+    card.innerHTML = `
+      <h3>Custom Goals</h3>
+      <div class="setting-help">Add your own goals anywhere in the habit stack. The original 26 cannot be removed.</div>
+      <div id="custom-list" style="margin:10px 0;display:flex;flex-direction:column;gap:8px;"></div>
+      <details ${editing ? 'open' : ''} id="custom-form-wrap">
+        <summary style="cursor:pointer;font-weight:600;font-size:15px;padding:8px 0;">${editing ? '✏️ Edit goal' : '＋ Add a new goal'}</summary>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+          <label class="setting-label" style="font-size:13px;">Emoji
+            <input class="input-text" id="cg-emoji" maxlength="4" value="${escapeHtml(editing?.emoji || '🎯')}">
+          </label>
+          <label class="setting-label" style="font-size:13px;">Goal text
+            <input class="input-text" id="cg-text" placeholder="e.g. Did I journal today?" value="${escapeHtml(editing?.text || '')}">
+          </label>
+          <label class="setting-label" style="font-size:13px;">Note (optional)
+            <input class="input-text" id="cg-note" placeholder="A short hint or reminder" value="${escapeHtml(editing?.note || '')}">
+          </label>
+          <label class="setting-label" style="font-size:13px;">Pillar
+            <select class="input-text" id="cg-pillar">${pillarOptions}</select>
+          </label>
+          <label class="setting-label" style="font-size:13px;">Insert after
+            <select class="input-text" id="cg-after">${afterOptions}</select>
+          </label>
+          <label class="setting-label" style="font-size:13px;display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="cg-anchor" ${editing?.anchor ? 'checked' : ''} style="width:24px;height:24px;">
+            Anchor (gold border + ★)
+          </label>
+          <div class="row-buttons" style="margin-top:6px;">
+            ${editing ? '<button class="btn-secondary" id="cg-cancel">Cancel</button>' : ''}
+            <button class="btn-primary" id="cg-save">${editing ? 'Save changes' : 'Add goal'}</button>
+          </div>
+        </div>
+      </details>
+    `;
+
+    card.querySelector('#custom-list').innerHTML = listHtml;
+    if (editing) {
+      card.querySelector('#cg-pillar').value = editing.pillar;
+      card.querySelector('#cg-after').value = editing.afterId;
+    } else {
+      card.querySelector('#cg-pillar').value = 'enjoyment';
+    }
+
+    card.querySelectorAll('.custom-row').forEach((row) => {
+      const id = row.dataset.id;
+      row.querySelector('[data-act="edit"]').addEventListener('click', () => {
+        editingId = id; refresh();
+      });
+      row.querySelector('[data-act="del"]').addEventListener('click', async () => {
+        if (!confirm('Delete this custom goal? Your saved check history for it stays in the database but it will no longer appear.')) return;
+        const list = await loadCustomGoals();
+        await saveCustomGoals(list.filter((c) => c.id !== id));
+        rebuildQuestionsFrom(await loadCustomGoals());
+        if (editingId === id) editingId = null;
+        showToast('Goal removed');
+        refresh();
+      });
+    });
+
+    if (editing) {
+      card.querySelector('#cg-cancel').addEventListener('click', () => { editingId = null; refresh(); });
+    }
+    card.querySelector('#cg-save').addEventListener('click', async () => {
+      const emoji = card.querySelector('#cg-emoji').value.trim() || '🎯';
+      const text = card.querySelector('#cg-text').value.trim();
+      const note = card.querySelector('#cg-note').value.trim();
+      const pillar = card.querySelector('#cg-pillar').value;
+      const afterId = card.querySelector('#cg-after').value;
+      const anchor = card.querySelector('#cg-anchor').checked;
+      if (!text) { showToast('Goal text required'); return; }
+      const list = await loadCustomGoals();
+      if (editing) {
+        const idx = list.findIndex((c) => c.id === editing.id);
+        if (idx >= 0) list[idx] = { ...list[idx], emoji, text, note, pillar, afterId, anchor };
+      } else {
+        const id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        list.push({ id, emoji, text, note, pillar, afterId, anchor });
+      }
+      await saveCustomGoals(list);
+      rebuildQuestionsFrom(list);
+      editingId = null;
+      showToast('Goal saved');
+      refresh();
+    });
+  }
+
+  await refresh();
 }
 
 let _reminderTimer = null;

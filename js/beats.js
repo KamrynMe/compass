@@ -44,6 +44,7 @@ function startBeats(waveId) {
 
   _beats.oscL = oscL; _beats.oscR = oscR; _beats.gain = gain;
   _beats.active = waveId;
+  requestWakeLock();
 
   if (_beats.durationSec > 0) {
     _beats.stopTimer = setTimeout(() => stopBeats(false), _beats.durationSec * 1000);
@@ -53,18 +54,36 @@ function startBeats(waveId) {
 function stopBeats(immediate) {
   if (_beats.stopTimer) { clearTimeout(_beats.stopTimer); _beats.stopTimer = null; }
   const { ctx, oscL, oscR, gain } = _beats;
-  if (!ctx || !oscL) { _beats.active = null; return; }
-  const fade = immediate ? 0.04 : 1.5;
-  try {
-    gain.gain.cancelScheduledValues(ctx.currentTime);
-    gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + fade);
-  } catch (_) {}
-  setTimeout(() => {
-    try { oscL.stop(); oscR.stop(); } catch (_) {}
-    _beats.oscL = null; _beats.oscR = null; _beats.gain = null;
-  }, fade * 1000 + 50);
   _beats.active = null;
+  if (!ctx) return;
+  const fade = immediate ? 0.05 : 1.2;
+  if (gain) {
+    try {
+      const now = ctx.currentTime;
+      const cur = Math.max(0.0001, gain.gain.value);
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(cur, now);
+      gain.gain.linearRampToValueAtTime(0, now + fade);
+    } catch (_) {}
+  }
+  setTimeout(() => {
+    try { if (oscL) oscL.stop(); } catch (_) {}
+    try { if (oscR) oscR.stop(); } catch (_) {}
+    try { if (oscL) oscL.disconnect(); } catch (_) {}
+    try { if (oscR) oscR.disconnect(); } catch (_) {}
+    try { if (gain) gain.disconnect(); } catch (_) {}
+    _beats.oscL = null; _beats.oscR = null; _beats.gain = null;
+  }, fade * 1000 + 60);
+  releaseWakeLock();
+}
+
+let _wakeLock = null;
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try { _wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+}
+function releaseWakeLock() {
+  if (_wakeLock) { try { _wakeLock.release(); } catch (_) {} _wakeLock = null; }
 }
 
 async function renderBeatsView(container) {
@@ -90,7 +109,7 @@ async function renderBeatsView(container) {
   note.innerHTML = `
     <div class="muted" style="font-size:14px;line-height:1.5;">
       <strong>Headphones required.</strong> Binaural beats only work with stereo separation between ears.
-      <br><span style="font-size:12px;">iOS PWA note: audio pauses when the screen locks.</span>
+      <br><span style="font-size:12px;">iOS limitation: audio stops if you lock the screen, switch apps, or close Compass. The screen will be kept on while playing if your iPhone allows it. For full background playback, a native app would be required.</span>
     </div>
   `;
   container.appendChild(note);

@@ -132,6 +132,7 @@ async function renderDayEditor(record, opts = {}) {
       const isUnlocked = unlocked.has(q.id);
       const row = document.createElement('div');
       row.className = 'q' + (q.anchor ? ' anchor' : '') + (qrec.checked ? ' checked' : '') + (isUnlocked ? '' : ' locked');
+      row.dataset.qid = q.id;
       const streak = counts[q.id] || 0;
       let streakTier = 'low';
       if (streak >= 5) streakTier = 'high';
@@ -151,14 +152,20 @@ async function renderDayEditor(record, opts = {}) {
       body.appendChild(row);
 
       const checkbox = row.querySelector('.q-check');
-      checkbox.addEventListener('change', () => {
+      checkbox.addEventListener('change', async () => {
         record.questions[q.id].checked = checkbox.checked;
         record.questions[q.id].checkedAt = checkbox.checked ? new Date().toISOString() : null;
         row.classList.toggle('checked', checkbox.checked);
-        if (checkbox.checked) { playCheckSound(); flashCheck(row); }
-        else { playUncheckSound(); }
-        updateProgress();
-        onChange(record);
+        if (checkbox.checked) {
+          playCheckSound();
+          flashCheck(row);
+          const pts = await pointsForCheck(record, q.id);
+          showPointsPop(row, pts);
+        } else {
+          playUncheckSound();
+        }
+        await onChange(record);
+        await refreshStreaksAndUnlocks();
       });
       const noteInput = row.querySelector('.q-noteinput');
       const expandBtn = row.querySelector('.q-expand');
@@ -226,6 +233,35 @@ async function renderDayEditor(record, opts = {}) {
     const scoreEl = wrap.querySelector('#ed-score');
     if (scoreEl) scoreEl.textContent = sc.score.toLocaleString();
   }
+  async function refreshStreaksAndUnlocks() {
+    const c2 = await recentCheckCounts(record.date);
+    const u2 = await computeUnlockedSet(record.date, c2);
+    for (const q of QUESTIONS) {
+      const row = wrap.querySelector(`.q[data-qid="${q.id}"]`);
+      if (!row) continue;
+      const streak = c2[q.id] || 0;
+      const badge = row.querySelector('.q-streak');
+      if (badge) {
+        badge.textContent = `${streak} / 7 last 7 days`;
+        badge.classList.remove('low', 'mid', 'high');
+        badge.classList.add(streak >= 5 ? 'high' : streak >= 3 ? 'mid' : 'low');
+      }
+      const cb = row.querySelector('.q-check');
+      const wasUnlocked = !row.classList.contains('locked');
+      const nowUnlocked = u2.has(q.id);
+      if (wasUnlocked !== nowUnlocked) {
+        row.classList.toggle('locked', !nowUnlocked);
+        if (cb) cb.disabled = !nowUnlocked;
+        const lockSpan = row.querySelector('.q-lock');
+        if (nowUnlocked && lockSpan) lockSpan.remove();
+        if (!nowUnlocked && !lockSpan) {
+          const txt = row.querySelector('.q-text');
+          if (txt) txt.insertAdjacentHTML('beforeend', ' <span class="q-lock">🔒 Locked</span>');
+        }
+      }
+    }
+  }
+
   updateProgress();
   wrap.addEventListener('record-saved', () => { renderLastEdited(); updateProgress(); });
 

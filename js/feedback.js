@@ -48,6 +48,16 @@ function playUncheckSound() {
   tone(440, 0, 0.10, 0.10);
 }
 
+// Floating "+X" inline badge anchored to the row
+function showPointsPop(rowEl, points) {
+  if (!rowEl || !points) return;
+  const pop = document.createElement('div');
+  pop.className = 'points-pop';
+  pop.textContent = '+' + points.toLocaleString();
+  rowEl.appendChild(pop);
+  setTimeout(() => pop.remove(), 1400);
+}
+
 // Brief flash class on a row + checkbox
 function flashCheck(rowEl) {
   const cb = rowEl.querySelector('.q-check');
