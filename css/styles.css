@@ -658,6 +658,45 @@ button { cursor: pointer; touch-action: manipulation; }
   to { transform: translateY(0); opacity: 1; }
 }
 
+/* Score row */
+.score-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+.score-row > div { text-align: center; }
+.score-label {
+  font-size: 12px; font-weight: 600; color: var(--ink3);
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+.score-value {
+  font-size: 22px; font-weight: 700; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+/* Locked state */
+.q.locked { opacity: 0.55; }
+.q.locked .q-check { background: var(--bg2); border-style: dashed; cursor: not-allowed; }
+.q-lock {
+  display: inline-block;
+  font-size: 11px;
+  background: var(--bg2);
+  color: var(--ink3);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 600;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.q-emoji { display: inline-block; margin-right: 4px; font-size: 19px; vertical-align: middle; }
+
+/* Prerequisite pillar styling */
+.pillar.prerequisite .pillar-head { background: #f0e8d6; border-bottom: 1px solid var(--gold-deep); }
+.pillar.prerequisite .pillar-name { color: var(--gold-deep); }
+.pillar.prerequisite .q-check { --check-color: var(--gold-deep); }
+
 /* Misc */
 .empty-state {
   text-align: center; color: var(--ink3);

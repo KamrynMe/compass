@@ -1,15 +1,21 @@
 // Renders the Today view AND is reused by the day-detail modal.
-function renderDayEditor(record, opts = {}) {
+async function renderDayEditor(record, opts = {}) {
   const onChange = opts.onChange || (() => {});
   const wrap = document.createElement('div');
+  const unlocked = await computeUnlockedSet(record.date);
+  const unlockedCount = unlocked.size;
 
-  // Progress
+  // Progress + score
   const progressCard = document.createElement('div');
   progressCard.className = 'card';
   progressCard.innerHTML = `
     <div class="progress-row">
       <div class="progress-bar"><div class="progress-fill" id="ed-progress-fill"></div></div>
-      <div class="progress-label" id="ed-progress-label">0 / 26</div>
+      <div class="progress-label" id="ed-progress-label">0 / ${unlockedCount}</div>
+    </div>
+    <div class="score-row">
+      <div><div class="score-label">Daily Score</div><div class="score-value" id="ed-score">0</div></div>
+      <div><div class="score-label">Unlocked</div><div class="score-value" id="ed-unlocked">${unlockedCount} / ${QUESTIONS.length}</div></div>
     </div>
   `;
   wrap.appendChild(progressCard);
@@ -53,9 +59,9 @@ function renderDayEditor(record, opts = {}) {
     weatherCard.innerHTML = `
       <h3>Weather</h3>
       <div class="weather-grid">
-        <div class="weather-cell"><div class="v" id="w-temp">${t(w?.temp6am, '°F')}</div><div class="l">6 AM</div></div>
-        <div class="weather-cell"><div class="v" id="w-feel">${t(w?.realFeel3pm, '°F')}</div><div class="l">3 PM Feel</div></div>
-        <div class="weather-cell"><div class="v" id="w-precip">${w?.precipitation == null ? '—' : (w.precipitation > 0 ? w.precipitation + '"' : 'None')}</div><div class="l">Precip</div></div>
+        <div class="weather-cell"><div class="v">${t(w?.temp6am, '°F')}</div><div class="l">6 AM</div></div>
+        <div class="weather-cell"><div class="v">${t(w?.realFeel3pm, '°F')}</div><div class="l">3 PM Feel</div></div>
+        <div class="weather-cell"><div class="v">${w?.precipitation == null ? '—' : (w.precipitation > 0 ? w.precipitation + '"' : 'None')}</div><div class="l">Precip</div></div>
       </div>
       <button class="weather-retry" id="ed-weather-fetch">${w?.fetchedAt ? 'Refresh weather' : 'Fetch weather'}</button>
       <details style="margin-top:10px;">
@@ -96,11 +102,12 @@ function renderDayEditor(record, opts = {}) {
   }
   renderWeather();
 
-  // Pillars + questions
+  // Pillars + questions (only render pillars that have ≥1 question)
   for (const p of PILLARS) {
+    const qs = questionsByPillar(p.id);
+    if (!qs.length) continue;
     const pillar = document.createElement('div');
     pillar.className = 'pillar ' + p.id;
-    const qs = questionsByPillar(p.id);
     pillar.innerHTML = `
       <div class="pillar-head">
         <div>
@@ -116,15 +123,16 @@ function renderDayEditor(record, opts = {}) {
     });
     const body = pillar.querySelector('[data-body]');
     for (const q of qs) {
-      const qrec = record.questions[q.id] || { checked: false, note: '' };
+      const qrec = record.questions[q.id] || { checked: false, note: '', checkedAt: null };
+      const isUnlocked = unlocked.has(q.id);
       const row = document.createElement('div');
-      row.className = 'q' + (q.anchor ? ' anchor' : '') + (qrec.checked ? ' checked' : '');
+      row.className = 'q' + (q.anchor ? ' anchor' : '') + (qrec.checked ? ' checked' : '') + (isUnlocked ? '' : ' locked');
       row.innerHTML = `
         <label class="q-check-tap">
-          <input type="checkbox" class="q-check" ${qrec.checked ? 'checked' : ''} data-q="${q.id}">
+          <input type="checkbox" class="q-check" ${qrec.checked ? 'checked' : ''} ${isUnlocked ? '' : 'disabled'} data-q="${q.id}">
         </label>
         <div class="q-body">
-          <div class="q-text">${escapeHtml(q.text)}${q.anchor ? ' <span class="q-star">★ Anchor</span>' : ''}</div>
+          <div class="q-text"><span class="q-emoji">${q.emoji || ''}</span> ${escapeHtml(q.text)}${q.anchor ? ' <span class="q-star">★ Anchor</span>' : ''}${isUnlocked ? '' : ' <span class="q-lock">🔒 Locked</span>'}</div>
           <div class="q-note">${escapeHtml(q.note)}</div>
           <textarea class="q-noteinput${qrec.note ? ' open' : ''}" placeholder="Add a note for ${q.id.toUpperCase()}…" data-note="${q.id}">${escapeHtml(qrec.note || '')}</textarea>
         </div>
@@ -135,6 +143,7 @@ function renderDayEditor(record, opts = {}) {
       const checkbox = row.querySelector('.q-check');
       checkbox.addEventListener('change', () => {
         record.questions[q.id].checked = checkbox.checked;
+        record.questions[q.id].checkedAt = checkbox.checked ? new Date().toISOString() : null;
         row.classList.toggle('checked', checkbox.checked);
         updateProgress();
         onChange(record);
@@ -175,7 +184,6 @@ function renderDayEditor(record, opts = {}) {
   // Last edited
   const lastEdited = document.createElement('div');
   lastEdited.className = 'last-edited';
-  lastEdited.id = 'ed-last-edited';
   wrap.appendChild(lastEdited);
   function renderLastEdited() {
     if (!record.lastEditedAt) {
@@ -188,12 +196,12 @@ function renderDayEditor(record, opts = {}) {
   }
   renderLastEdited();
 
-  function updateProgress() {
+  async function updateProgress() {
     const checked = QUESTIONS.filter((q) => record.questions[q.id]?.checked).length;
     const fill = wrap.querySelector('#ed-progress-fill');
     const label = wrap.querySelector('#ed-progress-label');
-    if (fill) fill.style.width = Math.round((checked / QUESTIONS.length) * 100) + '%';
-    if (label) label.textContent = checked + ' / ' + QUESTIONS.length;
+    if (fill) fill.style.width = unlockedCount ? Math.round((checked / unlockedCount) * 100) + '%' : '0%';
+    if (label) label.textContent = checked + ' / ' + unlockedCount;
     for (const p of PILLARS) {
       const meta = wrap.querySelector(`[data-meta="${p.id}"]`);
       if (meta) {
@@ -202,18 +210,12 @@ function renderDayEditor(record, opts = {}) {
         meta.textContent = `${done} / ${qs.length} answered`;
       }
     }
+    const sc = await scoreForRecord(record);
+    const scoreEl = wrap.querySelector('#ed-score');
+    if (scoreEl) scoreEl.textContent = sc.score.toLocaleString();
   }
   updateProgress();
-
-  // Wrap onChange to also re-render lastEdited
-  const userOnChange = onChange;
-  const wrappedOnChange = async (rec) => {
-    await userOnChange(rec);
-    renderLastEdited();
-  };
-  // Replace handlers? Simpler: poll after onChange via mutation — but easier path:
-  // We attach a custom event listener.
-  wrap.addEventListener('record-saved', renderLastEdited);
+  wrap.addEventListener('record-saved', () => { renderLastEdited(); updateProgress(); });
 
   return { element: wrap, refreshLastEdited: renderLastEdited };
 }
@@ -231,13 +233,11 @@ async function renderTodayView(container) {
   const date = todayISO();
   let record = await getOrInitDay(date);
 
-  // First-visit pre-population from yesterday
   if (!record.createdAt) {
     const yest = await getYesterdayRecord();
     if (yest && yest.sliders) {
       record.sliders = { ...yest.sliders };
     }
-    // Try fetching weather once
     try {
       const loc = await getSetting('location');
       if (loc && loc.lat != null) {
@@ -261,7 +261,7 @@ async function renderTodayView(container) {
   `;
   container.appendChild(header);
 
-  const editor = renderDayEditor(record, {
+  const editor = await renderDayEditor(record, {
     onChange: async (rec) => {
       await saveDay(rec);
       editor.element.dispatchEvent(new Event('record-saved'));

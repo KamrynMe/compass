@@ -6,6 +6,16 @@ function buildVariableCatalog() {
     vars.push({ id: 'slider:' + s.id, name: s.label, group: 'Sliders',
       get: (r) => r.sliders ? r.sliders[s.id] : null });
   }
+  // Daily score (raw points)
+  vars.push({ id: 'score:daily', name: 'Daily Score (points)', group: 'Score',
+    get: (r) => {
+      let total = 0;
+      for (const q of QUESTIONS) {
+        const qr = r.questions?.[q.id];
+        if (qr?.checked) total += 100; // simplified; real scoring uses settings async
+      }
+      return total;
+    } });
   // Pillar percentages + overall
   vars.push({ id: 'pct:overall', name: 'Overall Completion %', group: 'Completion',
     get: (r) => overallCompletion(r) });

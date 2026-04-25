@@ -12,6 +12,39 @@ async function renderSettingsView(container) {
 
   const loc = (await getSetting('location')) || { lat: '', lon: '', label: '' };
   const reminder = (await getSetting('reminderTime')) || '';
+  const wakeT = (await getSetting('wakeTime')) || '05:00';
+  const windT = (await getSetting('winddownTime')) || '19:00';
+
+  const cardW = document.createElement('div');
+  cardW.className = 'card';
+  cardW.innerHTML = `
+    <h3>Wake & Wind-Down</h3>
+    <div class="setting-help">Used by the daily score: checks earlier in your waking window earn up to 5×.</div>
+    <div class="setting-row">
+      <div class="setting-label">Wake Time</div>
+      <input class="input-text" type="time" id="wake-time" value="${wakeT}">
+    </div>
+    <div class="setting-row">
+      <div class="setting-label">Wind-Down Time</div>
+      <input class="input-text" type="time" id="wind-time" value="${windT}">
+    </div>
+    <div class="row-buttons">
+      <button class="btn-secondary" id="wake-default">Defaults (5am / 7pm)</button>
+      <button class="btn-primary" id="wake-save">Save</button>
+    </div>
+  `;
+  container.appendChild(cardW);
+  cardW.querySelector('#wake-default').addEventListener('click', () => {
+    cardW.querySelector('#wake-time').value = '05:00';
+    cardW.querySelector('#wind-time').value = '19:00';
+  });
+  cardW.querySelector('#wake-save').addEventListener('click', async () => {
+    const w = cardW.querySelector('#wake-time').value;
+    const d = cardW.querySelector('#wind-time').value;
+    await setSetting('wakeTime', w);
+    await setSetting('winddownTime', d);
+    showToast('Times saved');
+  });
 
   const card1 = document.createElement('div');
   card1.className = 'card';

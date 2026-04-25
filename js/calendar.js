@@ -145,7 +145,7 @@ async function openDayModal(dateISO) {
   `;
   modal.appendChild(head);
 
-  const editor = renderDayEditor(record, {
+  const editor = await renderDayEditor(record, {
     onChange: async (rec) => {
       await saveDay(rec);
       editor.element.dispatchEvent(new Event('record-saved'));

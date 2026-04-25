@@ -35,7 +35,7 @@ function reqAsPromise(req) {
 
 function emptyQuestions() {
   const out = {};
-  for (const q of QUESTIONS) out[q.id] = { checked: false, note: '' };
+  for (const q of QUESTIONS) out[q.id] = { checked: false, note: '', checkedAt: null };
   return out;
 }
 
