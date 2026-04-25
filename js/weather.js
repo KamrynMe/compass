@@ -17,6 +17,7 @@ async function fetchWeather(lat, lon) {
   const totalPrecip = precip.reduce((s, x) => s + (x || 0), 0);
   return {
     temp6am: i6 >= 0 ? Math.round(temps[i6]) : null,
+    temp3pm: i15 >= 0 ? Math.round(temps[i15]) : null,
     realFeel3pm: i15 >= 0 ? Math.round(feels[i15]) : null,
     precipitation: Math.round(totalPrecip * 100) / 100,
     fetchedAt: new Date().toISOString(),

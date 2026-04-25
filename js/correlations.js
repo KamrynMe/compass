@@ -35,6 +35,8 @@ function buildVariableCatalog() {
   // Weather
   vars.push({ id: 'w:temp6am', name: '6am Temperature (°F)', group: 'Weather',
     get: (r) => r.weather ? r.weather.temp6am : null });
+  vars.push({ id: 'w:temp3pm', name: '3pm Temperature (°F)', group: 'Weather',
+    get: (r) => r.weather ? r.weather.temp3pm : null });
   vars.push({ id: 'w:feel3pm', name: '3pm Real-Feel (°F)', group: 'Weather',
     get: (r) => r.weather ? r.weather.realFeel3pm : null });
   vars.push({ id: 'w:precip', name: 'Precipitation (inches)', group: 'Weather',

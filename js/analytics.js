@@ -279,6 +279,7 @@ function renderWeatherInfluence(parent, all) {
   }
   const wxVars = [
     { id: 'temp6am', name: '6am Temp', get: (r) => r.weather?.temp6am },
+    { id: 'temp3pm', name: '3pm Temp', get: (r) => r.weather?.temp3pm },
     { id: 'feel3pm', name: '3pm Feel', get: (r) => r.weather?.realFeel3pm },
     { id: 'precip',  name: 'Precip',   get: (r) => r.weather?.precipitation },
   ];

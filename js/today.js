@@ -59,16 +59,18 @@ async function renderDayEditor(record, opts = {}) {
     const t = (v, suf) => v == null ? '—' : v + suf;
     weatherCard.innerHTML = `
       <h3>Weather</h3>
-      <div class="weather-grid">
+      <div class="weather-grid weather-grid-4">
         <div class="weather-cell"><div class="v">${t(w?.temp6am, '°F')}</div><div class="l">6 AM</div></div>
+        <div class="weather-cell"><div class="v">${t(w?.temp3pm, '°F')}</div><div class="l">3 PM</div></div>
         <div class="weather-cell"><div class="v">${t(w?.realFeel3pm, '°F')}</div><div class="l">3 PM Feel</div></div>
         <div class="weather-cell"><div class="v">${w?.precipitation == null ? '—' : (w.precipitation > 0 ? w.precipitation + '"' : 'None')}</div><div class="l">Precip</div></div>
       </div>
       <button class="weather-retry" id="ed-weather-fetch">${w?.fetchedAt ? 'Refresh weather' : 'Fetch weather'}</button>
       <details style="margin-top:10px;">
         <summary class="muted" style="cursor:pointer;font-size:13px;">Edit manually</summary>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:8px;">
           <label class="muted" style="font-size:12px;">6am °F<input class="input-text" type="number" id="m-temp" value="${w?.temp6am ?? ''}"></label>
+          <label class="muted" style="font-size:12px;">3pm °F<input class="input-text" type="number" id="m-temp3" value="${w?.temp3pm ?? ''}"></label>
           <label class="muted" style="font-size:12px;">3pm Feel<input class="input-text" type="number" id="m-feel" value="${w?.realFeel3pm ?? ''}"></label>
           <label class="muted" style="font-size:12px;">Precip in<input class="input-text" type="number" step="0.01" id="m-precip" value="${w?.precipitation ?? ''}"></label>
         </div>
@@ -85,14 +87,16 @@ async function renderDayEditor(record, opts = {}) {
         showToast(e.message || 'Weather fetch failed');
       }
     });
-    ['m-temp', 'm-feel', 'm-precip'].forEach((id) => {
+    ['m-temp', 'm-temp3', 'm-feel', 'm-precip'].forEach((id) => {
       const el = weatherCard.querySelector('#' + id);
       el.addEventListener('change', () => {
-        if (!record.weather) record.weather = { temp6am: null, realFeel3pm: null, precipitation: null, fetchedAt: new Date().toISOString() };
+        if (!record.weather) record.weather = { temp6am: null, temp3pm: null, realFeel3pm: null, precipitation: null, fetchedAt: new Date().toISOString() };
         const t = parseFloat(weatherCard.querySelector('#m-temp').value);
+        const t3 = parseFloat(weatherCard.querySelector('#m-temp3').value);
         const f = parseFloat(weatherCard.querySelector('#m-feel').value);
         const p = parseFloat(weatherCard.querySelector('#m-precip').value);
         record.weather.temp6am = isNaN(t) ? null : Math.round(t);
+        record.weather.temp3pm = isNaN(t3) ? null : Math.round(t3);
         record.weather.realFeel3pm = isNaN(f) ? null : Math.round(f);
         record.weather.precipitation = isNaN(p) ? null : Math.round(p * 100) / 100;
         record.weather.fetchedAt = record.weather.fetchedAt || new Date().toISOString();
