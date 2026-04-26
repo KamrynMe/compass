@@ -161,8 +161,10 @@ async function renderDayEditor(record, opts = {}) {
       const qrec = record.questions[q.id] || (record.questions[q.id] = { value: 0, note: '', firstSetAt: null });
       if (qrec.value == null) qrec.value = qrec.checked ? 100 : 0;
       const isUnlocked = unlocked.has(q.id);
-      const avg7 = Math.round(counts[q.id] || 0);
-      const tier = avg7 >= 50 ? 'high' : avg7 >= 30 ? 'mid' : 'low';
+      const _e = counts[q.id];
+      const avg7 = Math.round((_e && typeof _e === 'object') ? (_e.avg || 0) : (_e || 0));
+      const days5 = (_e && typeof _e === 'object') ? (_e.daysAt50 || 0) : 0;
+      const tier = days5 >= 5 ? 'high' : days5 >= 3 ? 'mid' : 'low';
       const row = document.createElement('div');
       row.className = 'q' + (q.anchor ? ' anchor' : '') + (qrec.value > 0 ? ' checked' : '') + (isUnlocked ? '' : ' locked');
       row.dataset.qid = q.id;
@@ -175,7 +177,7 @@ async function renderDayEditor(record, opts = {}) {
             <span class="q-val" data-val="${q.id}">${qrec.value}</span>
           </div>
           <div class="q-meta-row">
-            <span class="q-streak ${tier}" title="7-day average">Avg ${avg7} / 100 last 7 days</span>
+            <span class="q-streak ${tier}" title="Days at ≥50% in last 7 days">${days5} / 7 days ≥50% &middot; avg ${avg7}</span>
             <span class="q-points-badge" data-points="${q.id}" style="display:none;"></span>
           </div>
           <textarea class="q-noteinput${qrec.note ? ' open' : ''}" placeholder="Add a note for #${q.displayNum}…" data-note="${q.id}">${escapeHtml(qrec.note || '')}</textarea>
@@ -186,25 +188,26 @@ async function renderDayEditor(record, opts = {}) {
 
       const slider = row.querySelector('.q-slider');
       const valOut = row.querySelector('.q-val');
+      let preInputZero = qrec.value === 0;
       slider.addEventListener('input', async () => {
         const v = parseInt(slider.value, 10);
-        const wasZero = qrec.value === 0;
-        const isNowZero = v === 0;
         qrec.value = v;
         valOut.textContent = v;
         if (v > 0 && !qrec.firstSetAt) qrec.firstSetAt = new Date().toISOString();
         if (v === 0) qrec.firstSetAt = null;
         row.classList.toggle('checked', v > 0);
-        if (wasZero && !isNowZero) { playCheckSound(); flashCheck(row); }
-        else if (!wasZero && isNowZero) { playUncheckSound(); }
         await renderPointsBadge(row, q.id);
         debouncedSave(record);
         autoFetchWeatherIfMissing();
         await refreshStreaksAndUnlocks();
       });
-      slider.addEventListener('change', () => {
-        // Satisfying release animation regardless of current value
-        if (qrec.value > 0) flashCheck(row);
+      slider.addEventListener('pointerdown', () => { preInputZero = qrec.value === 0; });
+      slider.addEventListener('change', async () => {
+        const isNowZero = qrec.value === 0;
+        if (preInputZero && !isNowZero) { playCheckSound(); flashCheck(row); }
+        else if (!preInputZero && isNowZero) { playUncheckSound(); }
+        else if (qrec.value > 0) { playCheckSound(); flashCheck(row); }
+        preInputZero = isNowZero;
       });
 
       const noteInput = row.querySelector('.q-noteinput');
@@ -320,12 +323,14 @@ async function renderDayEditor(record, opts = {}) {
     for (const q of QUESTIONS) {
       const row = wrap.querySelector(`.q[data-qid="${q.id}"]`);
       if (!row) continue;
-      const avg = Math.round(c2[q.id] || 0);
+      const e2 = c2[q.id];
+      const avg = Math.round((e2 && typeof e2 === 'object') ? (e2.avg || 0) : (e2 || 0));
+      const d5 = (e2 && typeof e2 === 'object') ? (e2.daysAt50 || 0) : 0;
       const badge = row.querySelector('.q-streak');
       if (badge) {
-        badge.textContent = `Avg ${avg} / 100 last 7 days`;
+        badge.textContent = `${d5} / 7 days ≥50% · avg ${avg}`;
         badge.classList.remove('low', 'mid', 'high');
-        badge.classList.add(avg >= 50 ? 'high' : avg >= 30 ? 'mid' : 'low');
+        badge.classList.add(d5 >= 5 ? 'high' : d5 >= 3 ? 'mid' : 'low');
       }
       const slider = row.querySelector('.q-slider');
       const wasUnlocked = !row.classList.contains('locked');
@@ -466,9 +471,16 @@ async function projectUnlockTimes() {
     currentDays = fastestDays;
   }
   return {
-    fastestText: remaining === 0 ? 'All unlocked!' : daysToYMD(fastestDays),
-    currentText: remaining === 0 ? 'All unlocked!' : daysToYMD(Math.ceil(currentDays)),
+    fastestText: remaining === 0 ? 'Done' : addDaysFmt(fastestDays),
+    currentText: remaining === 0 ? 'Done' : addDaysFmt(Math.ceil(currentDays)),
   };
+}
+
+function addDaysFmt(days) {
+  if (!days || days <= 0 || !isFinite(days)) return '—';
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function daysToYMD(days) {

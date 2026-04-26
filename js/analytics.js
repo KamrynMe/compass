@@ -139,16 +139,6 @@ function drawScoreTrend(all) {
     spanGaps: true,
     tension: 0.2,
   });
-  datasets.push({
-    label: 'Overall Completion %',
-    data: days.map((d) => d.record ? overallCompletion(d.record) : null),
-    borderColor: '#4a7ab0',
-    backgroundColor: 'rgba(74,122,176,0.18)',
-    borderDash: [4, 4],
-    tension: 0.25,
-    spanGaps: true,
-    pointRadius: 2,
-  });
   _charts.trend = new Chart(ctx, {
     type: 'line',
     data: { labels, datasets },
@@ -208,7 +198,7 @@ function renderCorrelationExplorer(parent, all) {
   lagWrap.className = 'lag-wrap';
   lagWrap.innerHTML = `
     <div class="lag-label">X-axis lag: <span id="lag-val">${_corrState.lag}</span> day${_corrState.lag === 1 ? '' : 's'}</div>
-    <input type="range" min="0" max="30" step="1" value="${_corrState.lag}" id="lag-input" class="slider-input" style="--c:#8a5ab0;">
+    <input type="range" min="0" max="30" step="1" value="${_corrState.lag}" id="lag-input" class="slider-input" style="--c:#8a6840;">
     <div class="muted" id="lag-explain" style="font-size:12px;line-height:1.5;"></div>
   `;
   parent.appendChild(lagWrap);

@@ -101,7 +101,8 @@ async function renderCalendarView(container) {
     if (rec) {
       bg = colorForPct(pct);
     } else if (isPast) {
-      bg = '#cfc6b8'; // greyscale of 0% pigment
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      bg = dark ? '#2a241e' : '#cfc6b8';
     } else {
       bg = 'transparent';
     }
@@ -131,9 +132,9 @@ async function renderCalendarView(container) {
   legend.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">
       <span style="background:#a89070;display:inline-block;width:14px;height:14px;border-radius:3px;"></span> 0%
-      <span style="background:#d68030;display:inline-block;width:14px;height:14px;border-radius:3px;"></span> 33%
-      <span style="background:#e8c040;display:inline-block;width:14px;height:14px;border-radius:3px;"></span> 66%
-      <span style="background:#4a9a6a;display:inline-block;width:14px;height:14px;border-radius:3px;"></span> 100%
+      <span style="background:#d68030;display:inline-block;width:14px;height:14px;border-radius:3px;"></span> 30%
+      <span style="background:#e8c040;display:inline-block;width:14px;height:14px;border-radius:3px;"></span> 60%
+      <span style="background:#4a9a6a;display:inline-block;width:14px;height:14px;border-radius:3px;"></span> 90%+
     </div>
     <div style="margin-top:6px;">Blue outline: edited on time (within 48h of day's end).</div>
   `;

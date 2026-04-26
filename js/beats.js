@@ -16,8 +16,8 @@ const WAVES = [
     note: 'E4 carrier — alert without stress, no pulsation for stability',
     carrier: 329.63, beat: 18, pulsate: false, color: '#c9a84c' },
   { id: 'gamma', name: 'Gamma', range: '40 Hz', use: 'Deep analysis, integration, planning',
-    note: 'A5 carrier (880 Hz) — clean, precise, true pitch with wide beat',
-    carrier: 880.00, beat: 40, pulsate: false, color: '#c05050' },
+    note: 'A4 carrier (440 Hz) — clean and precise',
+    carrier: 440.00, beat: 40, pulsate: false, color: '#c05050' },
 ];
 
 const _beats = {
@@ -132,6 +132,40 @@ async function getCircadianTransitions() {
   return Array.isArray(stored) && stored.length ? stored : CIRCADIAN_DEFAULTS;
 }
 
+// Default volume curve (1-100, percent). Defaults align with frequency transitions.
+const CIRCADIAN_VOLUME_DEFAULTS = [
+  { offsetMin: 0,    vol: 22 },
+  { offsetMin: 40,   vol: 22 },
+  { offsetMin: 240,  vol: 18 },
+  { offsetMin: 600,  vol: 16 },
+  { offsetMin: 840,  vol: 12 },
+  { offsetMin: 1350, vol: 14 },
+  { offsetMin: 1410, vol: 18 },
+];
+
+async function getCircadianVolumeNodes() {
+  const stored = await getSetting('circadianVolumeNodes');
+  return Array.isArray(stored) && stored.length ? stored : CIRCADIAN_VOLUME_DEFAULTS;
+}
+
+function volumeAtMinute(m, nodes) {
+  if (!nodes || !nodes.length) return _beats.volume * 100;
+  const sorted = nodes.slice().sort((a, b) => a.offsetMin - b.offsetMin);
+  for (let i = 0; i < sorted.length; i++) {
+    if (sorted[i].offsetMin >= m) {
+      if (i === 0) return sorted[0].vol;
+      const prev = sorted[i - 1], next = sorted[i];
+      const t = (m - prev.offsetMin) / Math.max(1, (next.offsetMin - prev.offsetMin));
+      return prev.vol + (next.vol - prev.vol) * t;
+    }
+  }
+  // wrap
+  const last = sorted[sorted.length - 1], first = sorted[0];
+  const wrapMin = Math.max(1, (1440 - last.offsetMin) + first.offsetMin);
+  const t = (m - last.offsetMin) / wrapMin;
+  return last.vol + (first.vol - last.vol) * t;
+}
+
 async function waveForNow() {
   const wakeStr = (await getSetting('wakeTime')) || '05:00';
   const [wH, wM] = wakeStr.split(':').map(Number);
@@ -153,15 +187,31 @@ function stopCircadian() {
   _beats.circadian = false;
 }
 
+async function applyCircadianVolume() {
+  if (!_beats.circadian || !_beats.gain || !_beats.ctx) return;
+  const wakeStr = (await getSetting('wakeTime')) || '05:00';
+  const [wH, wM] = wakeStr.split(':').map(Number);
+  const now = new Date();
+  const wakeMin = wH * 60 + wM;
+  const minsNow = now.getHours() * 60 + now.getMinutes();
+  const m = (minsNow - wakeMin + 24 * 60) % (24 * 60);
+  const nodes = await getCircadianVolumeNodes();
+  const pct = Math.max(1, Math.min(100, volumeAtMinute(m, nodes)));
+  const target = pct / 100;
+  try { _beats.gain.gain.setTargetAtTime(target, _beats.ctx.currentTime, 1.0); } catch (_) {}
+}
+
 async function startCircadian() {
   stopCircadian();
   _beats.circadian = true;
   const wave = await waveForNow();
   if (_beats.active) transitionToWave(wave); else startBeats(wave);
-  // Re-check every 30 seconds for boundary crossings
+  await applyCircadianVolume();
+  // Re-check every 30 seconds for state + volume curve
   _circadianTimer = setInterval(async () => {
     const next = await waveForNow();
     if (next !== _beats.active) transitionToWave(next);
+    await applyCircadianVolume();
   }, 30 * 1000);
 }
 
@@ -311,7 +361,7 @@ async function renderBeatsView(container) {
   const circBtn = document.createElement('button');
   circBtn.className = 'beat-btn beat-circadian';
   circBtn.dataset.wave = '__circadian';
-  circBtn.style.setProperty('--wc', '#c9a84c');
+  circBtn.style.setProperty('--wc', '#2a8a8a');
   circBtn.innerHTML = `
     <div class="beat-name">Circadian</div>
     <div class="beat-range">Auto</div>

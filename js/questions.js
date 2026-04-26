@@ -163,7 +163,7 @@ const SLIDERS = [
 // A habit is unlocked when its predecessor in QUESTIONS order has been checked
 // at least 5 times in the previous 7 days (not counting today). The first habit
 // is always unlocked.
-// Returns { qid: avg_value_in_last_7_days } honoring goal startDate.
+// Returns { qid: { avg, daysAt50 } } over the last 7 days (honoring startDate).
 async function recentCheckCounts(dateISO) {
   const endDate = new Date(dateISO + 'T00:00:00');
   const startDate = new Date(endDate);
@@ -176,20 +176,24 @@ async function recentCheckCounts(dateISO) {
     const eligible = recent.filter((r) => r.date >= qStart);
     const denom = Math.max(1, Math.min(7, eligible.length));
     let sum = 0;
+    let daysAt50 = 0;
     for (const r of eligible) {
       const qr = r.questions?.[q.id];
       if (!qr) continue;
       const v = qr.value != null ? qr.value : (qr.checked ? 100 : 0);
       sum += v;
+      if (v >= 50) daysAt50++;
     }
-    out[q.id] = sum / denom;
+    out[q.id] = { avg: sum / denom, daysAt50 };
   }
   return out;
 }
 
-// Per-pillar target factor: enjoyment = 1/2, others = 2/3 of max possible (500/habit).
+// Per-pillar target factor: enjoyment = 1/2, prerequisite + spiritual = 3/4, others = 2/3 of max possible (500/habit).
 function pillarTargetFactor(pillarId) {
-  return pillarId === 'enjoyment' ? 0.5 : (2 / 3);
+  if (pillarId === 'enjoyment') return 0.5;
+  if (pillarId === 'prerequisite' || pillarId === 'spiritual') return 0.75;
+  return 2 / 3;
 }
 function pillarTarget(pillarId) {
   const habits = QUESTIONS.filter((q) => q.pillar === pillarId);
@@ -217,6 +221,15 @@ async function overallScorePct(record) {
   return (actual / target) * 100;
 }
 
+// Threshold helper.
+function _ok(c, qid) {
+  const e = c[qid];
+  if (!e) return false;
+  // Backwards-compat: old schema returned a number (avg).
+  if (typeof e === 'number') return e >= 50;
+  return (e.daysAt50 || 0) >= 5;
+}
+
 async function computeUnlockedSet(dateISO, counts) {
   const c = counts || (await recentCheckCounts(dateISO));
   const unlocked = new Set();
@@ -224,18 +237,21 @@ async function computeUnlockedSet(dateISO, counts) {
   for (const q of QUESTIONS) {
     if (q.pillar === 'prerequisite') unlocked.add(q.id);
   }
-  // Chain: a non-prereq habit unlocks when its predecessor's 7-day average ≥ 50.
-  // First non-prereq unlocks iff some prereq's avg ≥ 50 (or no prereqs exist).
-  let prevSatisfied = true;
-  const prereqs = QUESTIONS.filter((q) => q.pillar === 'prerequisite');
-  if (prereqs.length) {
-    prevSatisfied = prereqs.some((q) => (c[q.id] || 0) >= 50);
-  }
+  // First non-prereq habit is always unlocked.
+  // After that: each habit unlocks if its predecessor was ≥50% on at least 5 of the last 7 days.
+  let firstNonPrereqSeen = false;
+  let prevSatisfied = false;
   for (const q of QUESTIONS) {
     if (q.pillar === 'prerequisite') continue;
+    if (!firstNonPrereqSeen) {
+      unlocked.add(q.id);
+      firstNonPrereqSeen = true;
+      prevSatisfied = _ok(c, q.id);
+      continue;
+    }
     if (prevSatisfied) {
       unlocked.add(q.id);
-      prevSatisfied = (c[q.id] || 0) >= 50;
+      prevSatisfied = _ok(c, q.id);
     } else {
       break;
     }

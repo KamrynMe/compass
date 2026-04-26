@@ -227,28 +227,7 @@ async function renderSettingsView(container) {
   cardS.className = 'card';
   cardS.innerHTML = `<h3>Storage</h3><div id="storage-info" class="muted" style="font-size:14px;">Reading…</div>`;
   container.appendChild(cardS);
-  (async () => {
-    let used = 0, quota = 0;
-    try {
-      if (navigator.storage?.estimate) {
-        const e = await navigator.storage.estimate();
-        used = e.usage || 0; quota = e.quota || 0;
-      }
-    } catch (_) {}
-    const all = await getAllDays();
-    const days = all.length;
-    const imageBytes = all.reduce((s, r) => s + (Array.isArray(r.images) ? r.images.reduce((t, i) => t + (i.dataUrl?.length || 0), 0) : 0), 0);
-    function fmt(b) {
-      if (b > 1024*1024) return (b / 1024 / 1024).toFixed(2) + ' MB';
-      if (b > 1024) return (b / 1024).toFixed(1) + ' KB';
-      return b + ' B';
-    }
-    cardS.querySelector('#storage-info').innerHTML = `
-      <div>Records: <strong>${days}</strong> days</div>
-      ${imageBytes ? `<div>Photos: <strong>${fmt(imageBytes)}</strong></div>` : ''}
-      ${used ? `<div>App used: <strong>${fmt(used)}</strong>${quota ? ' of ' + fmt(quota) : ''}</div>` : ''}
-    `;
-  })();
+  await renderStorageCard(cardS);
 
   const card4 = document.createElement('div');
   card4.className = 'card';
@@ -259,32 +238,201 @@ async function renderSettingsView(container) {
   container.appendChild(card4);
 }
 
+function _hmHtml(totalMin, hMax = 23, mStep = 5) {
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  const hOpts = [];
+  for (let i = 0; i <= hMax; i++) hOpts.push(`<option value="${i}" ${i===h?'selected':''}>${i}</option>`);
+  const mOpts = [];
+  for (let i = 0; i < 60; i += mStep) mOpts.push(`<option value="${i}" ${i===m?'selected':''}>${String(i).padStart(2,'0')}</option>`);
+  return `
+    <select class="input-text hm-h" style="max-width:70px;">${hOpts.join('')}</select>
+    <span style="align-self:center;">h</span>
+    <select class="input-text hm-m" style="max-width:70px;">${mOpts.join('')}</select>
+    <span style="align-self:center;">m</span>
+  `;
+}
+function _readHm(rowEl) {
+  const h = parseInt(rowEl.querySelector('.hm-h').value, 10) || 0;
+  const m = parseInt(rowEl.querySelector('.hm-m').value, 10) || 0;
+  return h * 60 + m;
+}
+
+function _fmtBytes(b) {
+  if (b > 1024 * 1024) return (b / 1024 / 1024).toFixed(2) + ' MB';
+  if (b > 1024) return (b / 1024).toFixed(1) + ' KB';
+  return b + ' B';
+}
+
+async function renderStorageCard(card) {
+  let used = 0, quota = 0;
+  try {
+    if (navigator.storage?.estimate) {
+      const e = await navigator.storage.estimate();
+      used = e.usage || 0; quota = e.quota || 0;
+    }
+  } catch (_) {}
+  const all = await getAllDays();
+  const days = all.length;
+  const imageBytes = all.reduce((s, r) => s + (Array.isArray(r.images) ? r.images.reduce((t, i) => t + (i.dataUrl?.length || 0), 0) : 0), 0);
+  const pct = quota ? Math.min(100, (used / quota) * 100) : null;
+  card.querySelector('#storage-info').innerHTML = `
+    <div>Records: <strong>${days}</strong> days</div>
+    ${imageBytes ? `<div>Photos total: <strong>${_fmtBytes(imageBytes)}</strong></div>` : ''}
+    ${used ? `<div>App storage: <strong>${_fmtBytes(used)}</strong>${quota ? ' of ' + _fmtBytes(quota) : ''}${pct !== null ? ' (' + pct.toFixed(2) + '%)' : ''}</div>` : ''}
+    <div class="row-buttons" style="margin-top:10px;">
+      <button class="btn-secondary" id="photos-browse">Browse photos</button>
+    </div>
+  `;
+  card.querySelector('#photos-browse')?.addEventListener('click', () => openPhotoBrowser(card));
+}
+
+async function openPhotoBrowser(card) {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = '';
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  overlay.appendChild(modal);
+  root.appendChild(overlay);
+
+  const head = document.createElement('div');
+  head.className = 'modal-head';
+  head.innerHTML = `
+    <button class="modal-back" id="ph-close" aria-label="Back">←</button>
+    <div class="modal-date">All Photos</div>
+    <span style="width:44px;"></span>
+  `;
+  modal.appendChild(head);
+  head.querySelector('#ph-close').addEventListener('click', async () => {
+    root.innerHTML = '';
+    await renderStorageCard(card);
+  });
+
+  const list = document.createElement('div');
+  modal.appendChild(list);
+
+  async function paint() {
+    const all = await getAllDays();
+    const items = [];
+    for (const r of all) {
+      if (!Array.isArray(r.images)) continue;
+      r.images.forEach((im, idx) => items.push({ rec: r, im, idx, idxOnDay: idx + 1, bytes: (im.dataUrl?.length || 0), date: r.date }));
+    }
+    items.sort((a, b) => b.bytes - a.bytes);
+    if (!items.length) { list.innerHTML = '<div class="empty-state">No photos yet.</div>'; return; }
+    list.innerHTML = items.map((p) => `
+      <div class="card photo-row" data-date="${p.date}" data-imid="${p.im.id}">
+        <div style="display:flex;gap:10px;align-items:center;">
+          <img src="${p.im.dataUrl}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;">${p.date} · #${p.idxOnDay}</div>
+            <div class="muted" style="font-size:12px;">${_fmtBytes(p.bytes)}</div>
+          </div>
+        </div>
+        <div class="row-buttons" style="margin-top:8px;">
+          <button class="btn-secondary" data-act="compress">Compress</button>
+          <button class="btn-danger" data-act="delete">Delete</button>
+        </div>
+      </div>
+    `).join('');
+    list.querySelectorAll('.photo-row').forEach((row) => {
+      const dateISO = row.dataset.date;
+      const imId = row.dataset.imid;
+      row.querySelector('[data-act="delete"]').addEventListener('click', async () => {
+        if (!confirm('Delete this photo permanently?')) return;
+        const rec = await getDay(dateISO);
+        if (rec) {
+          rec.images = (rec.images || []).filter((x) => x.id !== imId);
+          await saveDay(rec);
+        }
+        await paint();
+      });
+      row.querySelector('[data-act="compress"]').addEventListener('click', async () => {
+        const rec = await getDay(dateISO);
+        const orig = rec?.images?.find((x) => x.id === imId);
+        if (!orig) return;
+        // Build a more aggressive compression
+        const compressed = await compressDataUrl(orig.dataUrl, 800, 0.55);
+        const ok = await confirmCompressionPreview(orig.dataUrl, compressed.dataUrl, orig.dataUrl.length, compressed.dataUrl.length);
+        if (!ok) return;
+        orig.dataUrl = compressed.dataUrl;
+        await saveDay(rec);
+        await paint();
+      });
+    });
+  }
+  await paint();
+}
+
+function compressDataUrl(dataUrl, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (Math.max(width, height) > maxDim) {
+        const r = maxDim / Math.max(width, height);
+        width = Math.round(width * r);
+        height = Math.round(height * r);
+      }
+      const c = document.createElement('canvas');
+      c.width = width; c.height = height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve({ dataUrl: c.toDataURL('image/jpeg', quality) });
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+function confirmCompressionPreview(origUrl, newUrl, origBytes, newBytes) {
+  return new Promise((resolve) => {
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.style.zIndex = 200;
+    ov.innerHTML = `
+      <div class="modal" style="max-width:600px;align-self:center;">
+        <h3 style="margin-bottom:10px;">Confirm compression</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div><div class="muted" style="font-size:12px;text-align:center;">Original (${_fmtBytes(origBytes)})</div><img src="${origUrl}" style="width:100%;border-radius:6px;"></div>
+          <div><div class="muted" style="font-size:12px;text-align:center;">Compressed (${_fmtBytes(newBytes)})</div><img src="${newUrl}" style="width:100%;border-radius:6px;"></div>
+        </div>
+        <div class="row-buttons" style="margin-top:14px;">
+          <button class="btn-secondary" id="cmp-cancel">Cancel</button>
+          <button class="btn-primary" id="cmp-ok">Replace with smaller</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(ov);
+    const close = (val) => { ov.remove(); resolve(val); };
+    ov.querySelector('#cmp-cancel').addEventListener('click', () => close(false));
+    ov.querySelector('#cmp-ok').addEventListener('click', () => close(true));
+  });
+}
+
 async function renderCircadianCard(container) {
   const card = document.createElement('div');
   card.className = 'card';
   container.appendChild(card);
   const WAVE_OPTS = ['delta','theta','alpha','beta','gamma'];
-  function fmtOffset(min) {
-    const sign = min < 0 ? '-' : '+';
-    const m = Math.abs(min);
-    const h = Math.floor(m / 60); const r = m % 60;
-    return `${sign}${h}h ${String(r).padStart(2, '0')}m`;
-  }
+
   async function draw() {
     const transitions = (await getCircadianTransitions()).slice().sort((a,b)=>a.offsetMin-b.offsetMin);
-    const rowsHtml = transitions.map((t, i) => `
-      <div class="circ-row" data-i="${i}">
-        <input type="number" class="input-text circ-min" value="${t.offsetMin}" step="5" style="max-width:90px;">
+    const rowsHtml = transitions.map((t) => `
+      <div class="circ-row" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+        ${_hmHtml(t.offsetMin, 23, 5)}
+        <span style="align-self:center;">→</span>
         <select class="input-text circ-wave" style="max-width:120px;">
           ${WAVE_OPTS.map((w) => `<option value="${w}" ${t.wave===w?'selected':''}>${w[0].toUpperCase()+w.slice(1)}</option>`).join('')}
         </select>
-        <span class="muted" style="font-size:12px;align-self:center;">${fmtOffset(t.offsetMin)} from wake</span>
         <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
       </div>
     `).join('');
     card.innerHTML = `
       <h3>Circadian Timing</h3>
-      <div class="setting-help">Auto-mode plays each state at offsets from your wake time. Defaults follow the recommended cycle.</div>
+      <div class="setting-help">Each row: hours/minutes after wake → which state to play. Rows reorder automatically when saved.</div>
       <div id="circ-list" style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">${rowsHtml}</div>
       <div class="row-buttons">
         <button class="btn-secondary" id="circ-add">+ Add transition</button>
@@ -298,12 +446,12 @@ async function renderCircadianCard(container) {
     card.querySelector('#circ-add').addEventListener('click', () => {
       const row = document.createElement('div');
       row.className = 'circ-row';
-      row.innerHTML = `
-        <input type="number" class="input-text circ-min" value="0" step="5" style="max-width:90px;">
+      row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
+      row.innerHTML = _hmHtml(0, 23, 5) + `
+        <span style="align-self:center;">→</span>
         <select class="input-text circ-wave" style="max-width:120px;">
           ${WAVE_OPTS.map((w) => `<option value="${w}">${w[0].toUpperCase()+w.slice(1)}</option>`).join('')}
         </select>
-        <span class="muted" style="font-size:12px;align-self:center;">+0h 00m from wake</span>
         <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
       `;
       row.querySelector('[data-act="del"]').addEventListener('click', () => row.remove());
@@ -317,15 +465,118 @@ async function renderCircadianCard(container) {
     card.querySelector('#circ-save').addEventListener('click', async () => {
       const next = [];
       card.querySelectorAll('.circ-row').forEach((row) => {
-        const m = parseInt(row.querySelector('.circ-min').value, 10);
+        const m = _readHm(row);
         const w = row.querySelector('.circ-wave').value;
         if (!isNaN(m) && w) next.push({ offsetMin: m, wave: w });
       });
+      next.sort((a, b) => a.offsetMin - b.offsetMin);
       await setSetting('circadianTransitions', next);
-      showToast('Circadian schedule saved');
+      showToast('Schedule saved');
+      await draw();
     });
   }
   await draw();
+
+  // Volume curve nodes editor
+  const volCard = document.createElement('div');
+  volCard.className = 'card';
+  container.appendChild(volCard);
+  let _testTimer = null;
+  let _testActiveBtn = null;
+  function stopTest() {
+    if (_testTimer) { clearTimeout(_testTimer); _testTimer = null; }
+    stopBeats(true);
+    if (_testActiveBtn) { _testActiveBtn.textContent = 'Test'; _testActiveBtn = null; }
+  }
+
+  async function drawVol() {
+    const nodes = (await getCircadianVolumeNodes()).slice().sort((a,b)=>a.offsetMin-b.offsetMin);
+    const wakeStr = (await getSetting('wakeTime')) || '05:00';
+    const transitions = await getCircadianTransitions();
+    const waveAtMin = (m) => {
+      const sorted = transitions.slice().sort((a,b) => a.offsetMin - b.offsetMin);
+      let active = sorted[sorted.length-1].wave;
+      for (const t of sorted) { if (t.offsetMin <= m) active = t.wave; else break; }
+      return active;
+    };
+    const rowsHtml = nodes.map((n, i) => `
+      <div class="vol-row" data-i="${i}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+        ${_hmHtml(n.offsetMin, 23, 5)}
+        <span style="align-self:center;font-size:12px;color:var(--ink3);">@</span>
+        <input type="number" class="input-text vol-pct" min="1" max="100" step="1" value="${n.vol}" style="max-width:80px;">
+        <span style="align-self:center;font-size:12px;">%</span>
+        <button class="var-btn vol-test" data-i="${i}" style="background:var(--gold);color:white;">Test</button>
+        <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
+      </div>
+    `).join('');
+    volCard.innerHTML = `
+      <h3>Circadian Volume Curve</h3>
+      <div class="setting-help">Nodes interpolate smoothly through the day. Volumes 1-100%. Test plays the wave that would play at that time at that volume.</div>
+      <div id="vol-list" style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">${rowsHtml}</div>
+      <div class="row-buttons">
+        <button class="btn-secondary" id="vol-add">+ Add node</button>
+        <button class="btn-secondary" id="vol-reset">Reset to default</button>
+        <button class="btn-primary" id="vol-save">Save</button>
+      </div>
+    `;
+    volCard.querySelectorAll('.vol-row').forEach((row) => {
+      row.querySelector('[data-act="del"]').addEventListener('click', () => row.remove());
+      const testBtn = row.querySelector('.vol-test');
+      testBtn.addEventListener('click', async () => {
+        if (_testActiveBtn === testBtn) {
+          stopTest();
+          return;
+        }
+        stopTest();
+        const m = _readHm(row);
+        const pct = Math.max(1, Math.min(100, parseInt(row.querySelector('.vol-pct').value, 10) || 1));
+        const wave = waveAtMin(m);
+        // override global volume for test
+        const prevVol = _beats.volume;
+        _beats.volume = pct / 100;
+        if (typeof stopCircadian === 'function') stopCircadian();
+        startBeats(wave);
+        _beats.volume = prevVol;
+        testBtn.textContent = 'Stop';
+        _testActiveBtn = testBtn;
+        _testTimer = setTimeout(() => {
+          if (_testActiveBtn === testBtn) stopTest();
+        }, 6000);
+      });
+    });
+    volCard.querySelector('#vol-add').addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'vol-row';
+      row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
+      row.innerHTML = _hmHtml(0, 23, 5) + `
+        <span style="align-self:center;font-size:12px;">@</span>
+        <input type="number" class="input-text vol-pct" min="1" max="100" step="1" value="20" style="max-width:80px;">
+        <span style="align-self:center;font-size:12px;">%</span>
+        <button class="var-btn vol-test" style="background:var(--gold);color:white;">Test</button>
+        <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
+      `;
+      row.querySelector('[data-act="del"]').addEventListener('click', () => row.remove());
+      volCard.querySelector('#vol-list').appendChild(row);
+    });
+    volCard.querySelector('#vol-reset').addEventListener('click', async () => {
+      await setSetting('circadianVolumeNodes', null);
+      await drawVol();
+      showToast('Volume curve reset');
+    });
+    volCard.querySelector('#vol-save').addEventListener('click', async () => {
+      const next = [];
+      volCard.querySelectorAll('.vol-row').forEach((row) => {
+        const m = _readHm(row);
+        const v = parseInt(row.querySelector('.vol-pct').value, 10);
+        if (!isNaN(m) && !isNaN(v)) next.push({ offsetMin: m, vol: Math.max(1, Math.min(100, v)) });
+      });
+      next.sort((a, b) => a.offsetMin - b.offsetMin);
+      await setSetting('circadianVolumeNodes', next);
+      showToast('Volume curve saved');
+      await drawVol();
+    });
+  }
+  await drawVol();
 }
 
 async function renderCustomGoalsCard(container) {

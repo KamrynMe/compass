@@ -47,6 +47,22 @@
 :root[data-theme="dark"] .pillar { background: var(--surface); border-color: var(--rule); }
 :root[data-theme="dark"] .q-noteinput,
 :root[data-theme="dark"] .intentions { background: #2a2418; color: var(--ink); border-color: var(--rule); }
+:root[data-theme="dark"] .beat-btn { background: var(--surface); color: var(--ink); border-color: var(--rule); }
+:root[data-theme="dark"] .beat-name { color: var(--wc, var(--ink)); }
+:root[data-theme="dark"] .beat-use,
+:root[data-theme="dark"] .beat-note { color: var(--ink2); }
+:root[data-theme="dark"] .beat-btn.active { background: color-mix(in srgb, var(--wc, var(--gold)) 22%, var(--surface)); }
+:root[data-theme="dark"] .pillar-head { color: var(--ink); }
+:root[data-theme="dark"] .pillar.spiritual .pillar-head { background: #2a1818; }
+:root[data-theme="dark"] .pillar.health .pillar-head { background: #18222e; }
+:root[data-theme="dark"] .pillar.strategy .pillar-head { background: #2a2418; }
+:root[data-theme="dark"] .pillar.financial .pillar-head { background: #221830; }
+:root[data-theme="dark"] .pillar.enjoyment .pillar-head { background: #182a20; }
+:root[data-theme="dark"] .pillar.prerequisite .pillar-head { background: #2a2418; }
+:root[data-theme="dark"] .q { border-bottom-color: var(--rule); }
+:root[data-theme="dark"] .cal-day { background: #2a241e; color: #c8c0aa; }
+:root[data-theme="dark"] .cal-day.empty { background: transparent; }
+.theme-pick.active { background: var(--gold); color: white; border-color: var(--gold-deep); }
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -88,7 +104,7 @@ button { cursor: pointer; touch-action: manipulation; }
   background: var(--surface);
   border-top: 1px solid var(--rule);
   display: flex;
-  z-index: 50;
+  z-index: 99;
 }
 .tab {
   flex: 1;
@@ -674,17 +690,18 @@ input[type="time"].input-text { font-family: inherit; }
   z-index: 200;
 }
 .toast {
-  background: var(--ink);
-  color: white;
+  background: #1a1612;
+  color: #ffffff;
   padding: 10px 16px;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   max-width: 80%;
   text-align: center;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
   animation: toast-in 0.2s ease;
 }
+:root[data-theme="dark"] .toast { background: #fdf6e8; color: #1a1612; }
 @keyframes toast-in {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
