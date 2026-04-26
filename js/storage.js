@@ -93,6 +93,12 @@ async function saveDay(record, opts = {}) {
   if (!record.createdAt) record.createdAt = now;
   if (!opts.silent) record.lastEditedAt = now;
   else if (!record.lastEditedAt) record.lastEditedAt = now;
+  // Cache score percentages so calendar/analytics can read sync.
+  try {
+    record.overallScorePct = await overallScorePct(record);
+    record.pillarScorePct = {};
+    for (const p of PILLARS) record.pillarScorePct[p.id] = await pillarScorePct(record, p.id);
+  } catch (_) {}
   const store = await tx('days', 'readwrite');
   await reqAsPromise(store.put(record));
   return record;
@@ -186,16 +192,20 @@ function _val(r, qid) {
   if (!qr) return 0;
   return qr.value != null ? qr.value : (qr.checked ? 100 : 0);
 }
+// Sync read of cached score percentage stored at save time.
 function pillarCompletion(record, pillarId) {
   if (!record) return 0;
+  if (record.pillarScorePct && record.pillarScorePct[pillarId] != null) {
+    return Math.round(record.pillarScorePct[pillarId]);
+  }
+  // Fallback to value-average for not-yet-rescored records
   const qs = QUESTIONS.filter((q) => q.pillar === pillarId);
   if (!qs.length) return 0;
-  const sum = qs.reduce((s, q) => s + _val(record, q.id), 0);
-  return Math.round(sum / qs.length);
+  return Math.round(qs.reduce((s, q) => s + _val(record, q.id), 0) / qs.length);
 }
 function overallCompletion(record) {
   if (!record) return 0;
+  if (record.overallScorePct != null) return Math.round(record.overallScorePct);
   if (!QUESTIONS.length) return 0;
-  const sum = QUESTIONS.reduce((s, q) => s + _val(record, q.id), 0);
-  return Math.round(sum / QUESTIONS.length);
+  return Math.round(QUESTIONS.reduce((s, q) => s + _val(record, q.id), 0) / QUESTIONS.length);
 }

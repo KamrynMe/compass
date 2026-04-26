@@ -163,26 +163,58 @@ const SLIDERS = [
 // A habit is unlocked when its predecessor in QUESTIONS order has been checked
 // at least 5 times in the previous 7 days (not counting today). The first habit
 // is always unlocked.
-// Returns { qid: avg_value_in_last_7_days_INCLUDING_dateISO } where value is 0..100
+// Returns { qid: avg_value_in_last_7_days } honoring goal startDate.
 async function recentCheckCounts(dateISO) {
   const endDate = new Date(dateISO + 'T00:00:00');
   const startDate = new Date(endDate);
   startDate.setDate(startDate.getDate() - 6);
   const startISO = startDate.toISOString().slice(0, 10);
   const recent = await getDaysInRange(startISO, dateISO);
-  const sums = {};
-  for (const q of QUESTIONS) sums[q.id] = 0;
-  for (const r of recent) {
-    for (const q of QUESTIONS) {
+  const out = {};
+  for (const q of QUESTIONS) {
+    const qStart = q.startDate || '0000-01-01';
+    const eligible = recent.filter((r) => r.date >= qStart);
+    const denom = Math.max(1, Math.min(7, eligible.length));
+    let sum = 0;
+    for (const r of eligible) {
       const qr = r.questions?.[q.id];
       if (!qr) continue;
       const v = qr.value != null ? qr.value : (qr.checked ? 100 : 0);
-      sums[q.id] += v;
+      sum += v;
     }
+    out[q.id] = sum / denom;
   }
-  const out = {};
-  for (const q of QUESTIONS) out[q.id] = sums[q.id] / 7;
   return out;
+}
+
+// Per-pillar target factor: enjoyment = 1/2, others = 2/3 of max possible (500/habit).
+function pillarTargetFactor(pillarId) {
+  return pillarId === 'enjoyment' ? 0.5 : (2 / 3);
+}
+function pillarTarget(pillarId) {
+  const habits = QUESTIONS.filter((q) => q.pillar === pillarId);
+  return habits.length * 500 * pillarTargetFactor(pillarId);
+}
+function dailyTarget() {
+  let t = 0;
+  for (const p of PILLARS) t += pillarTarget(p.id);
+  return t;
+}
+
+async function pillarScorePct(record, pillarId) {
+  const habits = QUESTIONS.filter((q) => q.pillar === pillarId);
+  const target = pillarTarget(pillarId);
+  if (target === 0) return 0;
+  let actual = 0;
+  for (const q of habits) actual += await pointsForCheck(record, q.id);
+  return (actual / target) * 100;
+}
+async function overallScorePct(record) {
+  const target = dailyTarget();
+  if (target === 0) return 0;
+  let actual = 0;
+  for (const q of QUESTIONS) actual += await pointsForCheck(record, q.id);
+  return (actual / target) * 100;
 }
 
 async function computeUnlockedSet(dateISO, counts) {
@@ -221,13 +253,14 @@ function scoreMultiplierFor(checkTime, wakeStr, winddownStr, dateISO) {
   const base = new Date(dateISO + 'T00:00:00');
   const wake = new Date(base); wake.setHours(wH, wM, 0, 0);
   const winddown = new Date(base); winddown.setHours(dH, dM, 0, 0);
-  if (winddown <= wake) winddown.setDate(winddown.getDate() + 1); // overnight wind-down
+  if (winddown <= wake) winddown.setDate(winddown.getDate() + 1);
   const total = winddown - wake;
   if (total <= 0) return 1;
   const t = new Date(checkTime).getTime();
+  // No early bonus before wake — multiplier only counts AT or AFTER wake.
+  if (t < wake.getTime()) return 1;
   const remaining = winddown - t;
-  if (remaining <= 0) return 1;
-  if (t < wake.getTime()) return 5; // checked before wake — give max
+  if (remaining <= 0) return 1; // after wind-down: no bonus
   const frac = Math.max(0, Math.min(1, remaining / total));
   return 1 + 4 * frac;
 }

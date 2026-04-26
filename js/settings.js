@@ -24,6 +24,28 @@ async function renderSettingsView(container) {
   const reminder = (await getSetting('reminderTime')) || wakeT;
   const lastExport = await getSetting('lastExportAt');
 
+  // Theme card
+  const themeMode = (await getSetting('themeMode')) || 'system';
+  const cardT = document.createElement('div');
+  cardT.className = 'card';
+  cardT.innerHTML = `
+    <h3>Appearance</h3>
+    <div class="row-buttons" id="theme-row">
+      <button class="btn-secondary theme-pick ${themeMode==='light'?'active':''}" data-mode="light">Light</button>
+      <button class="btn-secondary theme-pick ${themeMode==='dark'?'active':''}" data-mode="dark">Dark</button>
+      <button class="btn-secondary theme-pick ${themeMode==='system'?'active':''}" data-mode="system">System</button>
+    </div>
+  `;
+  container.appendChild(cardT);
+  cardT.querySelectorAll('.theme-pick').forEach((b) => {
+    b.addEventListener('click', async () => {
+      const m = b.dataset.mode;
+      await setSetting('themeMode', m);
+      applyTheme(m);
+      cardT.querySelectorAll('.theme-pick').forEach((x) => x.classList.toggle('active', x === b));
+    });
+  });
+
   const cardW = document.createElement('div');
   cardW.className = 'card';
   const wDerived = winddownFromWake(wakeT);
@@ -49,7 +71,7 @@ async function renderSettingsView(container) {
   });
   cardW.querySelector('#wake-default').addEventListener('click', () => {
     cardW.querySelector('#wake-time').value = '05:00';
-    cardW.querySelector('#wind-derived').textContent = winddownFromWake('05:00');
+    cardW.querySelector('#wind-derived').textContent = time12h(winddownFromWake('05:00'));
   });
   cardW.querySelector('#wake-save').addEventListener('click', async () => {
     const w = cardW.querySelector('#wake-time').value;
@@ -198,15 +220,112 @@ async function renderSettingsView(container) {
     showToast(e.target.checked ? 'Sounds on' : 'Sounds off');
   });
 
+  await renderCircadianCard(container);
   await renderCustomGoalsCard(container);
+
+  const cardS = document.createElement('div');
+  cardS.className = 'card';
+  cardS.innerHTML = `<h3>Storage</h3><div id="storage-info" class="muted" style="font-size:14px;">Reading…</div>`;
+  container.appendChild(cardS);
+  (async () => {
+    let used = 0, quota = 0;
+    try {
+      if (navigator.storage?.estimate) {
+        const e = await navigator.storage.estimate();
+        used = e.usage || 0; quota = e.quota || 0;
+      }
+    } catch (_) {}
+    const all = await getAllDays();
+    const days = all.length;
+    const imageBytes = all.reduce((s, r) => s + (Array.isArray(r.images) ? r.images.reduce((t, i) => t + (i.dataUrl?.length || 0), 0) : 0), 0);
+    function fmt(b) {
+      if (b > 1024*1024) return (b / 1024 / 1024).toFixed(2) + ' MB';
+      if (b > 1024) return (b / 1024).toFixed(1) + ' KB';
+      return b + ' B';
+    }
+    cardS.querySelector('#storage-info').innerHTML = `
+      <div>Records: <strong>${days}</strong> days</div>
+      ${imageBytes ? `<div>Photos: <strong>${fmt(imageBytes)}</strong></div>` : ''}
+      ${used ? `<div>App used: <strong>${fmt(used)}</strong>${quota ? ' of ' + fmt(quota) : ''}</div>` : ''}
+    `;
+  })();
 
   const card4 = document.createElement('div');
   card4.className = 'card';
   card4.innerHTML = `
     <h3>About</h3>
-    <div class="setting-help">Compass — v1.0 — built ${new Date().toLocaleDateString()}.<br>Made by Cameron Thomas.<br>All data lives only on this device. No accounts.</div>
+    <div class="setting-help">Compass Habits — built ${new Date().toLocaleDateString()}.<br>Made by Cameron Thomas.<br>All data lives only on this device. No accounts.</div>
   `;
   container.appendChild(card4);
+}
+
+async function renderCircadianCard(container) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  container.appendChild(card);
+  const WAVE_OPTS = ['delta','theta','alpha','beta','gamma'];
+  function fmtOffset(min) {
+    const sign = min < 0 ? '-' : '+';
+    const m = Math.abs(min);
+    const h = Math.floor(m / 60); const r = m % 60;
+    return `${sign}${h}h ${String(r).padStart(2, '0')}m`;
+  }
+  async function draw() {
+    const transitions = (await getCircadianTransitions()).slice().sort((a,b)=>a.offsetMin-b.offsetMin);
+    const rowsHtml = transitions.map((t, i) => `
+      <div class="circ-row" data-i="${i}">
+        <input type="number" class="input-text circ-min" value="${t.offsetMin}" step="5" style="max-width:90px;">
+        <select class="input-text circ-wave" style="max-width:120px;">
+          ${WAVE_OPTS.map((w) => `<option value="${w}" ${t.wave===w?'selected':''}>${w[0].toUpperCase()+w.slice(1)}</option>`).join('')}
+        </select>
+        <span class="muted" style="font-size:12px;align-self:center;">${fmtOffset(t.offsetMin)} from wake</span>
+        <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
+      </div>
+    `).join('');
+    card.innerHTML = `
+      <h3>Circadian Timing</h3>
+      <div class="setting-help">Auto-mode plays each state at offsets from your wake time. Defaults follow the recommended cycle.</div>
+      <div id="circ-list" style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">${rowsHtml}</div>
+      <div class="row-buttons">
+        <button class="btn-secondary" id="circ-add">+ Add transition</button>
+        <button class="btn-secondary" id="circ-reset">Reset to default</button>
+        <button class="btn-primary" id="circ-save">Save</button>
+      </div>
+    `;
+    card.querySelectorAll('.circ-row').forEach((row) => {
+      row.querySelector('[data-act="del"]').addEventListener('click', () => row.remove());
+    });
+    card.querySelector('#circ-add').addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'circ-row';
+      row.innerHTML = `
+        <input type="number" class="input-text circ-min" value="0" step="5" style="max-width:90px;">
+        <select class="input-text circ-wave" style="max-width:120px;">
+          ${WAVE_OPTS.map((w) => `<option value="${w}">${w[0].toUpperCase()+w.slice(1)}</option>`).join('')}
+        </select>
+        <span class="muted" style="font-size:12px;align-self:center;">+0h 00m from wake</span>
+        <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
+      `;
+      row.querySelector('[data-act="del"]').addEventListener('click', () => row.remove());
+      card.querySelector('#circ-list').appendChild(row);
+    });
+    card.querySelector('#circ-reset').addEventListener('click', async () => {
+      await setSetting('circadianTransitions', null);
+      await draw();
+      showToast('Reset to defaults');
+    });
+    card.querySelector('#circ-save').addEventListener('click', async () => {
+      const next = [];
+      card.querySelectorAll('.circ-row').forEach((row) => {
+        const m = parseInt(row.querySelector('.circ-min').value, 10);
+        const w = row.querySelector('.circ-wave').value;
+        if (!isNaN(m) && w) next.push({ offsetMin: m, wave: w });
+      });
+      await setSetting('circadianTransitions', next);
+      showToast('Circadian schedule saved');
+    });
+  }
+  await draw();
 }
 
 async function renderCustomGoalsCard(container) {
@@ -265,6 +384,9 @@ async function renderCustomGoalsCard(container) {
           <label class="setting-label" style="font-size:13px;">Insert after
             <select class="input-text" id="cg-after">${buildAfterOptionsHtml(editing?.pillar || 'enjoyment')}</select>
           </label>
+          <label class="setting-label" style="font-size:13px;">Start date
+            <input class="input-text" type="date" id="cg-start" value="${escapeHtml(editing?.startDate || todayISO())}">
+          </label>
           <label class="setting-label" style="font-size:13px;display:flex;align-items:center;gap:8px;">
             <input type="checkbox" id="cg-anchor" ${editing?.anchor ? 'checked' : ''} style="width:24px;height:24px;">
             Anchor (gold border + ★)
@@ -315,14 +437,15 @@ async function renderCustomGoalsCard(container) {
       const pillar = card.querySelector('#cg-pillar').value;
       const afterId = card.querySelector('#cg-after').value;
       const anchor = card.querySelector('#cg-anchor').checked;
+      const startDate = card.querySelector('#cg-start').value || todayISO();
       if (!text) { showToast('Goal text required'); return; }
       const list = await loadCustomGoals();
       if (editing) {
         const idx = list.findIndex((c) => c.id === editing.id);
-        if (idx >= 0) list[idx] = { ...list[idx], emoji, text, note, pillar, afterId, anchor };
+        if (idx >= 0) list[idx] = { ...list[idx], emoji, text, note, pillar, afterId, anchor, startDate };
       } else {
         const id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-        list.push({ id, emoji, text, note, pillar, afterId, anchor });
+        list.push({ id, emoji, text, note, pillar, afterId, anchor, startDate });
       }
       await saveCustomGoals(list);
       rebuildQuestionsFrom(list);

@@ -10,11 +10,12 @@ function lerpHex(a, b, t) {
   return '#' + ((r << 16) | (g << 8) | c).toString(16).padStart(6, '0');
 }
 function colorForPct(pct) {
-  // brown → orange → yellow → green
+  // brown(0) → orange(30) → yellow(60) → green(90)+; clamp at 100+
   if (pct <= 0) return '#a89070';
-  if (pct < 33) return lerpHex('#a89070', '#d68030', pct / 33);
-  if (pct < 66) return lerpHex('#d68030', '#e8c040', (pct - 33) / 33);
-  return lerpHex('#e8c040', '#4a9a6a', (pct - 66) / 34);
+  if (pct < 30) return lerpHex('#a89070', '#d68030', pct / 30);
+  if (pct < 60) return lerpHex('#d68030', '#e8c040', (pct - 30) / 30);
+  if (pct < 90) return lerpHex('#e8c040', '#4a9a6a', (pct - 60) / 30);
+  return '#4a9a6a';
 }
 
 async function renderCalendarView(container) {
@@ -105,16 +106,19 @@ async function renderCalendarView(container) {
       bg = 'transparent';
     }
     cell.style.background = bg;
-    // White text on darker cells for contrast
-    if (rec && pct >= 33) cell.style.color = 'white';
-    else if (rec && pct === 0) cell.style.color = 'white'; // also white on the brown 0% fill
-    else if (!rec && isPast) cell.style.color = '#5a5040';
+    // White text on every filled cell (brown is dark enough); grey on past empty.
+    if (rec) cell.style.setProperty('color', '#ffffff', 'important');
+    else if (isPast) cell.style.setProperty('color', '#6a6050', 'important');
 
-    // Blue outline if last edit was within 48h after the day's end (i.e. NOT a late edit)
     if (rec && rec.lastEditedAt && !isLateEdit(rec)) cell.classList.add('timely');
 
+    const isFuture = dateISO > today;
+    if (isFuture) cell.classList.add('future');
     cell.innerHTML = `<div>${day}</div>`;
-    cell.addEventListener('click', () => openDayModal(dateISO));
+    cell.addEventListener('click', () => {
+      if (isFuture) { showToast('Future dates can\'t be edited'); return; }
+      openDayModal(dateISO);
+    });
     grid.appendChild(cell);
   }
   container.appendChild(grid);
@@ -154,8 +158,9 @@ async function openDayModal(dateISO) {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
   head.innerHTML = `
+    <button class="modal-back" id="modal-close" aria-label="Back">←</button>
     <div class="modal-date">${niceDate}</div>
-    <button class="modal-close" id="modal-close">×</button>
+    <span style="width:44px;"></span>
   `;
   modal.appendChild(head);
 

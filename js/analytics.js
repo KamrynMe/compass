@@ -87,7 +87,7 @@ async function drawDailyScoreChart(all) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } },
+      scales: { y: { beginAtZero: true, suggestedMax: 100 } },
     },
   });
 }
@@ -118,7 +118,7 @@ function drawScoreTrend(all) {
   if (_charts.trend) _charts.trend.destroy();
   const days = lastN(all, 30);
   const labels = days.map((d) => d.date.slice(5));
-  const colors = { oura: '#4a7ab0', circumstances: '#c9a84c', mood: '#4a9a6a', productivity: '#8a5ab0' };
+  const colors = { circumstances: '#4a7ab0', mood: '#4a9a6a', productivity: '#8a5ab0' };
   const datasets = SLIDERS.map((s) => ({
     label: s.label,
     data: days.map((d) => d.record ? d.record.sliders[s.id] : null),
@@ -128,6 +128,17 @@ function drawScoreTrend(all) {
     spanGaps: true,
     pointRadius: 2,
   }));
+  // Overall completion as gold dotted overlay
+  datasets.push({
+    label: 'Overall %',
+    data: days.map((d) => d.record ? overallCompletion(d.record) : null),
+    borderColor: '#c9a84c',
+    backgroundColor: 'rgba(201,168,76,0.15)',
+    borderDash: [5, 4],
+    pointRadius: 1,
+    spanGaps: true,
+    tension: 0.2,
+  });
   datasets.push({
     label: 'Overall Completion %',
     data: days.map((d) => d.record ? overallCompletion(d.record) : null),
@@ -155,7 +166,7 @@ function drawPillarTrend(all) {
   if (_charts.pillar) _charts.pillar.destroy();
   const days = lastN(all, 14);
   const labels = days.map((d) => d.date.slice(5));
-  const colors = { prerequisite: '#8a6820', spiritual: '#c05050', health: '#4a7ab0', strategy: '#c9a84c', financial: '#8a5ab0', enjoyment: '#4a9a6a' };
+  const colors = { prerequisite: '#c9a84c', spiritual: '#c05050', health: '#4a7ab0', strategy: '#8a6840', financial: '#8a5ab0', enjoyment: '#4a9a6a' };
   const datasets = PILLARS.map((p) => ({
     label: p.name,
     data: days.map((d) => d.record ? pillarCompletion(d.record, p.id) : 0),

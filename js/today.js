@@ -23,12 +23,12 @@ async function renderDayEditor(record, opts = {}) {
       <div class="progress-label" id="ed-progress-label">0 / ${unlockedCount}</div>
     </div>
     <div class="score-row score-row-3">
+      <div><div class="score-label">to Beat</div><div class="score-value" id="ed-beat">${scoreToBeat.toLocaleString()}</div></div>
       <div><div class="score-label">Daily Score</div><div class="score-value" id="ed-score">0</div></div>
-      <div><div class="score-label">Score to Beat</div><div class="score-value" id="ed-beat">${scoreToBeat.toLocaleString()}</div></div>
-      <div><div class="score-label">Unlocked</div><div class="score-value" id="ed-unlocked">${unlockedCount} / ${QUESTIONS.length}</div></div>
+      <div><div class="score-label">All Unlocked In</div><div class="score-value proj" id="proj-current">${proj.currentText}</div></div>
     </div>
     <div class="proj-row">
-      <div class="proj-line"><span class="proj-label">All-unlock at current rate:</span> <span id="proj-current">${proj.currentText}</span></div>
+      <div class="proj-line"><span class="proj-label">Unlocked:</span> ${unlockedCount} / ${QUESTIONS.length}</div>
       <div class="proj-line"><span class="proj-label">Fastest possible:</span> <span id="proj-fast">${proj.fastestText}</span></div>
     </div>
     <div class="score-tick-row" id="ed-tick">Next per-habit −1 in <span id="ed-tick-val">—</span></div>
@@ -152,6 +152,9 @@ async function renderDayEditor(record, opts = {}) {
       </div>
       <div class="pillar-body" data-body="${p.id}"></div>
     `;
+    // Default-collapse pillars whose habits are all locked.
+    const anyUnlockedHere = qs.some((q) => unlocked.has(q.id));
+    if (!anyUnlockedHere) pillar.classList.add('collapsed');
     pillar.querySelector('.pillar-head').addEventListener('click', () => pillar.classList.toggle('collapsed'));
     const body = pillar.querySelector('[data-body]');
     for (const q of qs) {
@@ -434,7 +437,7 @@ async function computeScoreToBeat(dateISO) {
     const s = await scoreForRecord(r);
     sum += s.score;
   }
-  return Math.ceil(sum / 2);
+  return Math.max(99, Math.ceil(sum / 2));
 }
 
 async function projectUnlockTimes() {

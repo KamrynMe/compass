@@ -28,9 +28,27 @@ async function navigate() {
 }
 
 window.addEventListener('hashchange', navigate);
+function applyTheme(setting) {
+  let t = setting || 'system';
+  if (t === 'system') {
+    t = matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', t);
+}
+
+if (matchMedia) {
+  try {
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
+      const s = (await getSetting('themeMode')) || 'system';
+      if (s === 'system') applyTheme('system');
+    });
+  } catch (_) {}
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   if (!location.hash) location.hash = '#today';
   try { await initQuestions(); } catch (_) {}
+  try { applyTheme((await getSetting('themeMode')) || 'system'); } catch (_) {}
   navigate();
 
   // Re-arm reminder if set

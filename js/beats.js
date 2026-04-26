@@ -54,6 +54,117 @@ function _hardStop() {
   releaseWakeLock();
 }
 
+// Smooth crossfade: fade current beats out while next fades in.
+function transitionToWave(waveId, fadeSec = 2.0) {
+  const wave = WAVES.find((w) => w.id === waveId);
+  if (!wave) return;
+  if (!_beats.ctx || !_beats.gain) {
+    return startBeats(waveId);
+  }
+  const ctx = _beats.ctx;
+  // Fade out current
+  const oldGain = _beats.gain;
+  const oldL = _beats.oscL, oldR = _beats.oscR, oldPulseTimer = _beats.pulseTimer;
+  try {
+    const now = ctx.currentTime;
+    const cur = Math.max(0.0001, oldGain.gain.value || 0.0001);
+    oldGain.gain.cancelScheduledValues(now);
+    oldGain.gain.setValueAtTime(cur, now);
+    oldGain.gain.linearRampToValueAtTime(0, now + fadeSec);
+  } catch (_) {}
+  if (oldPulseTimer) clearInterval(oldPulseTimer);
+  setTimeout(() => {
+    try { oldL && oldL.stop(); } catch (_) {}
+    try { oldR && oldR.stop(); } catch (_) {}
+    try { oldL && oldL.disconnect(); } catch (_) {}
+    try { oldR && oldR.disconnect(); } catch (_) {}
+    try { oldGain && oldGain.disconnect(); } catch (_) {}
+  }, fadeSec * 1000 + 50);
+
+  // Build new
+  const merger = ctx.createChannelMerger(2);
+  const oscL = ctx.createOscillator(); oscL.type = 'sine';
+  const oscR = ctx.createOscillator(); oscR.type = 'sine';
+  const baseLeft = wave.carrier - wave.beat / 2;
+  const baseRight = wave.carrier + wave.beat / 2;
+  oscL.frequency.value = baseLeft;
+  oscR.frequency.value = baseRight;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+  gain.gain.linearRampToValueAtTime(_beats.volume, ctx.currentTime + fadeSec);
+  oscL.connect(merger, 0, 0);
+  oscR.connect(merger, 0, 1);
+  merger.connect(gain).connect(ctx.destination);
+  oscL.start(); oscR.start();
+  _beats.oscL = oscL; _beats.oscR = oscR; _beats.gain = gain;
+  _beats.active = waveId;
+  if (wave.pulsate) {
+    const period = wave.pulsePeriod || 15;
+    const depth = wave.pulseDepth || 0.4;
+    const start = ctx.currentTime;
+    const tick = () => {
+      if (!_beats.oscL || !_beats.oscR) return;
+      const t = ctx.currentTime - start;
+      const offset = Math.sin((2 * Math.PI * t) / period) * depth;
+      try {
+        _beats.oscL.frequency.setTargetAtTime(baseLeft + offset, ctx.currentTime, 0.5);
+        _beats.oscR.frequency.setTargetAtTime(baseRight + offset, ctx.currentTime, 0.5);
+      } catch (_) {}
+    };
+    _beats.pulseTimer = setInterval(tick, 1000);
+  }
+}
+
+// --- Circadian auto mode ---
+let _circadianTimer = null;
+const CIRCADIAN_DEFAULTS = [
+  { offsetMin: 0,    wave: 'beta'  }, // wake
+  { offsetMin: 40,   wave: 'gamma' }, // wake + 40 min
+  { offsetMin: 240,  wave: 'alpha' }, // wake + 4h
+  { offsetMin: 600,  wave: 'theta' }, // 4h before wind (10h after wake)
+  { offsetMin: 840,  wave: 'delta' }, // wind (14h after wake)
+  { offsetMin: 1350, wave: 'theta' }, // 90 min before next wake
+  { offsetMin: 1410, wave: 'alpha' }, // 30 min before next wake
+];
+
+async function getCircadianTransitions() {
+  const stored = await getSetting('circadianTransitions');
+  return Array.isArray(stored) && stored.length ? stored : CIRCADIAN_DEFAULTS;
+}
+
+async function waveForNow() {
+  const wakeStr = (await getSetting('wakeTime')) || '05:00';
+  const [wH, wM] = wakeStr.split(':').map(Number);
+  const now = new Date();
+  const minsNow = now.getHours() * 60 + now.getMinutes();
+  const wakeMin = wH * 60 + wM;
+  let m = (minsNow - wakeMin + 24 * 60) % (24 * 60);
+  const trans = (await getCircadianTransitions()).slice().sort((a, b) => a.offsetMin - b.offsetMin);
+  let active = trans[trans.length - 1].wave;
+  for (const t of trans) {
+    if (t.offsetMin <= m) active = t.wave;
+    else break;
+  }
+  return active;
+}
+
+function stopCircadian() {
+  if (_circadianTimer) { clearInterval(_circadianTimer); _circadianTimer = null; }
+  _beats.circadian = false;
+}
+
+async function startCircadian() {
+  stopCircadian();
+  _beats.circadian = true;
+  const wave = await waveForNow();
+  if (_beats.active) transitionToWave(wave); else startBeats(wave);
+  // Re-check every 30 seconds for boundary crossings
+  _circadianTimer = setInterval(async () => {
+    const next = await waveForNow();
+    if (next !== _beats.active) transitionToWave(next);
+  }, 30 * 1000);
+}
+
 function startBeats(waveId) {
   // Always stop any existing first to prevent overlap.
   _hardStop();
@@ -187,16 +298,41 @@ async function renderBeatsView(container) {
       <div class="beat-countdown" data-wave="${w.id}" style="display:none;"></div>
     `;
     btn.addEventListener('click', () => {
+      if (_beats.circadian) stopCircadian();
       if (_beats.active === w.id) stopBeats(true);
+      else if (_beats.active) transitionToWave(w.id);
       else startBeats(w.id);
       refreshActive();
     });
     grid.appendChild(btn);
   }
+
+  // Sixth button: Circadian auto-mode
+  const circBtn = document.createElement('button');
+  circBtn.className = 'beat-btn beat-circadian';
+  circBtn.dataset.wave = '__circadian';
+  circBtn.style.setProperty('--wc', '#c9a84c');
+  circBtn.innerHTML = `
+    <div class="beat-name">Circadian</div>
+    <div class="beat-range">Auto</div>
+    <div class="beat-use">Plays the right state for the time of day</div>
+    <div class="beat-note">Theta → Delta → Theta → Alpha → Beta → Gamma → Alpha → Theta</div>
+  `;
+  circBtn.addEventListener('click', async () => {
+    if (_beats.circadian) {
+      stopCircadian();
+      stopBeats(true);
+    } else {
+      await startCircadian();
+    }
+    refreshActive();
+  });
+  grid.appendChild(circBtn);
   let cdTimer = null;
   function refreshActive() {
     grid.querySelectorAll('.beat-btn').forEach((b) => {
-      b.classList.toggle('active', b.dataset.wave === _beats.active);
+      const isCirc = b.dataset.wave === '__circadian';
+      b.classList.toggle('active', isCirc ? !!_beats.circadian : (b.dataset.wave === _beats.active));
     });
     grid.querySelectorAll('.beat-countdown').forEach((el) => { el.style.display = 'none'; el.textContent = ''; });
     if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
@@ -262,6 +398,7 @@ async function renderBeatsView(container) {
     refreshActive();
   });
   ctrlCard.querySelector('#beat-stop').addEventListener('click', () => {
+    stopCircadian();
     stopBeats(true);
     refreshActive();
   });
