@@ -1,4 +1,4 @@
-const CACHE = 'compass-v16';
+const CACHE = 'compass-v17';
 const ASSETS = [
   './',
   './index.html',

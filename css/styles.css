@@ -851,7 +851,7 @@ input[type="time"].input-text { font-family: inherit; }
 /* Momentum: blends with page background, no box outline; glow extends freely. */
 .momentum-card {
   text-align: center;
-  padding: 28px 8px;
+  padding: 12px 8px;
   margin-bottom: 14px;
   background: transparent;
   border: none;
@@ -864,7 +864,7 @@ input[type="time"].input-text { font-family: inherit; }
   width: 100%;
   overflow: visible;
 }
-.momentum-card .mom-value-wrap { padding: 18px 0; }
+.momentum-card .mom-value-wrap { padding: 6px 0; }
 .momentum-card .mom-value {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -886,14 +886,13 @@ input[type="time"].input-text { font-family: inherit; }
 
 .momentum-card.glow .mom-value {
   text-shadow:
-    0 0 8px rgba(201,168,76,0.95),
-    0 0 22px rgba(201,168,76,0.78),
-    0 0 44px rgba(201,168,76,0.5);
-  animation: mom-glow 2.2s ease-in-out infinite;
+    0 0 6px rgba(120,200,140,0.32),
+    0 0 14px rgba(120,200,140,0.22);
+  animation: mom-glow 2.8s ease-in-out infinite;
 }
 @keyframes mom-glow {
-  0%, 100% { text-shadow: 0 0 8px rgba(201,168,76,0.95),  0 0 22px rgba(201,168,76,0.65), 0 0 38px rgba(201,168,76,0.4); }
-  50%      { text-shadow: 0 0 12px rgba(201,168,76,1.0),  0 0 32px rgba(201,168,76,0.9),  0 0 60px rgba(201,168,76,0.7); }
+  0%, 100% { text-shadow: 0 0 6px rgba(120,200,140,0.28),  0 0 14px rgba(120,200,140,0.18); }
+  50%      { text-shadow: 0 0 8px rgba(120,200,140,0.40),  0 0 18px rgba(120,200,140,0.30); }
 }
 .mom-value .mom-pct {
   font-size: 0.75em;
