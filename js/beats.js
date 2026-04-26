@@ -16,8 +16,8 @@ const WAVES = [
     note: 'E4 carrier — alert without stress, no pulsation for stability',
     carrier: 329.63, beat: 18, pulsate: false, color: '#c9a84c' },
   { id: 'gamma', name: 'Gamma', range: '40 Hz', use: 'Deep analysis, integration, planning',
-    note: 'A4 carrier (446 Hz) — slightly tuned-up for clean perceived pitch with wide beat',
-    carrier: 446.00, beat: 40, pulsate: false, color: '#c05050' },
+    note: 'A4 carrier (452 Hz) — slightly tuned-up for clean perceived pitch with wide beat',
+    carrier: 452.00, beat: 40, pulsate: false, color: '#c05050' },
 ];
 
 const _beats = {
