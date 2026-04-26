@@ -46,6 +46,26 @@ async function renderSettingsView(container) {
     });
   });
 
+  // Debug card
+  const debugOn = !!(await getSetting('debugMomentum'));
+  const cardD = document.createElement('div');
+  cardD.className = 'card';
+  cardD.innerHTML = `
+    <h3>Debug</h3>
+    <label class="setting-row" style="flex-direction:row;align-items:center;justify-content:space-between;">
+      <div>
+        <div class="setting-label">Show Momentum calculation</div>
+        <div class="setting-help">Adds a breakdown of how today's Momentum % is computed beneath the tile.</div>
+      </div>
+      <input type="checkbox" id="dbg-mom" ${debugOn ? 'checked' : ''} style="width:28px;height:28px;">
+    </label>
+  `;
+  container.appendChild(cardD);
+  cardD.querySelector('#dbg-mom').addEventListener('change', async (e) => {
+    await setSetting('debugMomentum', e.target.checked);
+    showToast(e.target.checked ? 'Debug on' : 'Debug off');
+  });
+
   const cardW = document.createElement('div');
   cardW.className = 'card';
   const wDerived = winddownFromWake(wakeT);

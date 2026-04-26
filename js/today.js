@@ -17,18 +17,51 @@ async function renderDayEditor(record, opts = {}) {
   progressCard.className = 'card';
   const scoreToBeat = await computeScoreToBeat(record.date);
   const proj = await projectUnlockTimes();
-  const momentum = await computeMomentum(record.date);
+  const momObj = await computeMomentum(record.date);
+  const momentum = momObj?.pct;
   const momCol = momentumColor(momentum);
+  const debugOn = !!(await getSetting('debugMomentum'));
 
-  // Big momentum tile — first thing on the page
   const momCard = document.createElement('div');
   momCard.className = 'card momentum-card' + (momentum != null && momentum >= 100 ? ' glow' : '');
-  momCard.style.background = momCol;
+  let dbgHtml = '';
+  if (debugOn && momObj?.debug) {
+    const d = momObj.debug;
+    if (d.reason) {
+      dbgHtml = `<div class="mom-debug">${d.reason}</div>`;
+    } else {
+      const fmt = (n) => Math.round(n).toLocaleString();
+      const past6Lines = (d.past6Scores || []).map((p) => `${p.date.slice(5)}: ${fmt(p.score)}`).join(' · ');
+      const top2Lines = (d.top2 || []).map((p) => `${p.date.slice(5)} ${fmt(p.score)}`).join(' + ');
+      dbgHtml = `
+        <div class="mom-debug">
+          <div>Past 6 days: ${past6Lines || '—'}</div>
+          <div>Sum past 6: <strong>${fmt(d.sumPast6)}</strong> · Top 2: ${top2Lines || '—'} = ${fmt(d.top2Sum)} · Avg ${fmt(d.top2Avg)}</div>
+          <div>Today: <strong>${fmt(d.todayScore)}</strong></div>
+          <div>(${fmt(d.sumPast6)} ÷ (${fmt(d.top2Sum)} × 3)) × (${fmt(d.todayScore)} ÷ ${fmt(d.top2Avg)})</div>
+          <div>= ${d.factorA.toFixed(3)} × ${d.factorB.toFixed(3)} × 100 = ${momentum}%</div>
+        </div>
+      `;
+    }
+  }
   momCard.innerHTML = `
     <div class="mom-label">Momentum</div>
-    <div class="mom-value">${momentum == null ? '—' : momentum + '%'}</div>
+    <div class="mom-value-wrap"><span class="mom-value" style="color:${momCol};">${momentum == null ? '—' : momentum + '%'}</span></div>
+    ${dbgHtml}
   `;
   wrap.appendChild(momCard);
+  // Fit the number to ~75% of the inner card width
+  requestAnimationFrame(() => {
+    const valEl = momCard.querySelector('.mom-value');
+    const wrapEl = momCard.querySelector('.mom-value-wrap');
+    if (!valEl || !wrapEl) return;
+    const targetW = wrapEl.clientWidth * 0.75;
+    valEl.style.fontSize = '160px';
+    valEl.style.lineHeight = '1';
+    const actual = valEl.scrollWidth || 1;
+    const ratio = targetW / actual;
+    valEl.style.fontSize = (160 * ratio).toFixed(1) + 'px';
+  });
   progressCard.innerHTML = `
     <div class="progress-row">
       <div class="progress-bar"><div class="progress-fill" id="ed-progress-fill"></div></div>
@@ -458,20 +491,25 @@ async function renderDayEditor(record, opts = {}) {
 async function computeMomentum(dateISO) {
   const all = await getAllDays();
   const past6 = all.filter((r) => r.date < dateISO).slice(-6);
-  if (past6.length < 2) return null;
+  if (past6.length < 2) return { pct: null, debug: { reason: 'Need at least 2 prior days', past6: past6.length } };
   const past6Scores = [];
-  for (const r of past6) past6Scores.push((await scoreForRecord(r)).score);
-  const sumPast6 = past6Scores.reduce((s, x) => s + x, 0);
-  const sortedDesc = [...past6Scores].sort((a, b) => b - a);
+  for (const r of past6) past6Scores.push({ date: r.date, score: (await scoreForRecord(r)).score });
+  const sumPast6 = past6Scores.reduce((s, x) => s + x.score, 0);
+  const sortedDesc = [...past6Scores].sort((a, b) => b.score - a.score);
   const top2 = sortedDesc.slice(0, 2);
-  const top2Sum = top2.reduce((s, x) => s + x, 0);
+  const top2Sum = top2.reduce((s, x) => s + x.score, 0);
   const top2Avg = top2.length ? top2Sum / top2.length : 0;
-  if (top2Sum === 0 || top2Avg === 0) return null;
   const todayRec = all.find((r) => r.date === dateISO);
   const todayScore = todayRec ? (await scoreForRecord(todayRec)).score : 0;
+  const debug = {
+    past6Scores, sumPast6, top2, top2Sum, top2Avg, todayScore,
+    factorA: top2Sum > 0 ? sumPast6 / (top2Sum * 3) : 0,
+    factorB: top2Avg > 0 ? todayScore / top2Avg : 0,
+  };
+  if (top2Sum === 0 || top2Avg === 0) return { pct: 0, debug };
   const momentum = (sumPast6 / (top2Sum * 3)) * (todayScore / top2Avg);
-  if (!isFinite(momentum) || momentum < 0) return 0;
-  return Math.floor(momentum * 100);
+  if (!isFinite(momentum) || momentum < 0) return { pct: 0, debug };
+  return { pct: Math.floor(momentum * 100), debug };
 }
 
 function momentumColor(pct) {
