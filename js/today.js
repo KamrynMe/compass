@@ -45,7 +45,7 @@ async function renderDayEditor(record, opts = {}) {
     }
   }
   momCard.innerHTML = `
-    <div class="mom-value-wrap"><span class="mom-value" style="color:${momCol};">${momentum == null ? '—' : momentum + '%'}</span></div>
+    <div class="mom-value-wrap"><span class="mom-value" style="color:${momCol};">${momentum == null ? '—' : momentum + '<span class="mom-pct">%</span>'}</span></div>
     <div class="mom-label-wrap"><span class="mom-label">Momentum</span></div>
     <div class="mom-debug-slot"></div>
   `;
@@ -58,7 +58,7 @@ async function renderDayEditor(record, opts = {}) {
     const pct = m?.pct;
     const valEl = momCard.querySelector('.mom-value');
     if (valEl) {
-      valEl.textContent = pct == null ? '—' : pct + '%';
+      valEl.innerHTML = pct == null ? '—' : pct + '<span class="mom-pct">%</span>';
       valEl.style.color = momentumColor(pct);
     }
     momCard.classList.toggle('glow', pct != null && pct >= 100);
