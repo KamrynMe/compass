@@ -16,8 +16,8 @@ const WAVES = [
     note: 'E4 carrier — alert without stress, no pulsation for stability',
     carrier: 329.63, beat: 18, pulsate: false, color: '#c9a84c' },
   { id: 'gamma', name: 'Gamma', range: '40 Hz', use: 'Deep analysis, integration, planning',
-    note: 'A4 carrier (440 Hz) — clean and precise',
-    carrier: 440.00, beat: 40, pulsate: false, color: '#c05050' },
+    note: 'A4 carrier (446 Hz) — slightly tuned-up for clean perceived pitch with wide beat',
+    carrier: 446.00, beat: 40, pulsate: false, color: '#c05050' },
 ];
 
 const _beats = {
@@ -335,6 +335,29 @@ async function renderBeatsView(container) {
   wavesCard.innerHTML = `<h3>State</h3><div class="beats-grid"></div>`;
   container.appendChild(wavesCard);
   const grid = wavesCard.querySelector('.beats-grid');
+
+  // Circadian button FIRST
+  const circBtn = document.createElement('button');
+  circBtn.className = 'beat-btn beat-circadian';
+  circBtn.dataset.wave = '__circadian';
+  circBtn.style.setProperty('--wc', '#2a8a8a');
+  circBtn.innerHTML = `
+    <div class="beat-name">Circadian</div>
+    <div class="beat-range">Auto</div>
+    <div class="beat-use">Plays the right state for the time of day</div>
+    <div class="beat-note">Theta → Delta → Theta → Alpha → Beta → Gamma → Alpha → Theta</div>
+  `;
+  circBtn.addEventListener('click', async () => {
+    if (_beats.circadian) {
+      stopCircadian();
+      stopBeats(true);
+    } else {
+      await startCircadian();
+    }
+    refreshActive();
+  });
+  grid.appendChild(circBtn);
+
   for (const w of WAVES) {
     const btn = document.createElement('button');
     btn.className = 'beat-btn';
@@ -357,27 +380,6 @@ async function renderBeatsView(container) {
     grid.appendChild(btn);
   }
 
-  // Sixth button: Circadian auto-mode
-  const circBtn = document.createElement('button');
-  circBtn.className = 'beat-btn beat-circadian';
-  circBtn.dataset.wave = '__circadian';
-  circBtn.style.setProperty('--wc', '#2a8a8a');
-  circBtn.innerHTML = `
-    <div class="beat-name">Circadian</div>
-    <div class="beat-range">Auto</div>
-    <div class="beat-use">Plays the right state for the time of day</div>
-    <div class="beat-note">Theta → Delta → Theta → Alpha → Beta → Gamma → Alpha → Theta</div>
-  `;
-  circBtn.addEventListener('click', async () => {
-    if (_beats.circadian) {
-      stopCircadian();
-      stopBeats(true);
-    } else {
-      await startCircadian();
-    }
-    refreshActive();
-  });
-  grid.appendChild(circBtn);
   let cdTimer = null;
   function refreshActive() {
     grid.querySelectorAll('.beat-btn').forEach((b) => {

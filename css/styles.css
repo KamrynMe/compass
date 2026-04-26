@@ -53,12 +53,18 @@
 :root[data-theme="dark"] .beat-note { color: var(--ink2); }
 :root[data-theme="dark"] .beat-btn.active { background: color-mix(in srgb, var(--wc, var(--gold)) 22%, var(--surface)); }
 :root[data-theme="dark"] .pillar-head { color: var(--ink); }
-:root[data-theme="dark"] .pillar.spiritual .pillar-head { background: #2a1818; }
-:root[data-theme="dark"] .pillar.health .pillar-head { background: #18222e; }
-:root[data-theme="dark"] .pillar.strategy .pillar-head { background: #2a2418; }
-:root[data-theme="dark"] .pillar.financial .pillar-head { background: #221830; }
-:root[data-theme="dark"] .pillar.enjoyment .pillar-head { background: #182a20; }
 :root[data-theme="dark"] .pillar.prerequisite .pillar-head { background: #2a2418; }
+:root[data-theme="dark"] .pillar.prerequisite .pillar-name { color: var(--p-border); }
+:root[data-theme="dark"] .pillar.spiritual .pillar-head { background: #2a1818; }
+:root[data-theme="dark"] .pillar.spiritual .pillar-name { color: var(--s-border); }
+:root[data-theme="dark"] .pillar.health .pillar-head { background: #18222e; }
+:root[data-theme="dark"] .pillar.health .pillar-name { color: var(--h-border); }
+:root[data-theme="dark"] .pillar.strategy .pillar-head { background: #2a2418; }
+:root[data-theme="dark"] .pillar.strategy .pillar-name { color: var(--st-border); }
+:root[data-theme="dark"] .pillar.financial .pillar-head { background: #221830; }
+:root[data-theme="dark"] .pillar.financial .pillar-name { color: var(--f-border); }
+:root[data-theme="dark"] .pillar.enjoyment .pillar-head { background: #182a20; }
+:root[data-theme="dark"] .pillar.enjoyment .pillar-name { color: var(--e-border); }
 :root[data-theme="dark"] .q { border-bottom-color: var(--rule); }
 :root[data-theme="dark"] .cal-day { background: #2a241e; color: #c8c0aa; }
 :root[data-theme="dark"] .cal-day.empty { background: transparent; }
@@ -280,17 +286,19 @@ button { cursor: pointer; touch-action: manipulation; }
 }
 .pillar.collapsed .pillar-body { max-height: 0; }
 
-/* Pillar palette: Spiritual=red, Health=blue, Strategy=gold, Enjoyment=green, Financial=purple. */
-.pillar.spiritual .pillar-head { background: var(--e-bg);  border-bottom: 1px solid var(--e-border); }
-.pillar.spiritual .pillar-name { color: var(--e-color); }
-.pillar.health    .pillar-head { background: var(--st-bg); border-bottom: 1px solid var(--st-border); }
-.pillar.health    .pillar-name { color: var(--st-color); }
-.pillar.strategy  .pillar-head { background: var(--s-bg);  border-bottom: 1px solid var(--s-border); }
-.pillar.strategy  .pillar-name { color: var(--s-color); }
+/* Pillar palette: Prereq=gold, Spiritual=red, Health=blue, Strategy=brown, Financial=purple, Enjoyment=green. */
+.pillar.prerequisite .pillar-head { background: var(--p-bg);  border-bottom: 1px solid var(--p-border); }
+.pillar.prerequisite .pillar-name { color: var(--p-border); }
+.pillar.spiritual .pillar-head { background: var(--s-bg);  border-bottom: 1px solid var(--s-border); }
+.pillar.spiritual .pillar-name { color: var(--s-border); }
+.pillar.health    .pillar-head { background: var(--h-bg);  border-bottom: 1px solid var(--h-border); }
+.pillar.health    .pillar-name { color: var(--h-border); }
+.pillar.strategy  .pillar-head { background: var(--st-bg); border-bottom: 1px solid var(--st-border); }
+.pillar.strategy  .pillar-name { color: var(--st-border); }
 .pillar.financial .pillar-head { background: var(--f-bg);  border-bottom: 1px solid var(--f-border); }
-.pillar.financial .pillar-name { color: var(--f-color); }
-.pillar.enjoyment .pillar-head { background: var(--h-bg);  border-bottom: 1px solid var(--h-border); }
-.pillar.enjoyment .pillar-name { color: var(--h-color); }
+.pillar.financial .pillar-name { color: var(--f-border); }
+.pillar.enjoyment .pillar-head { background: var(--e-bg);  border-bottom: 1px solid var(--e-border); }
+.pillar.enjoyment .pillar-name { color: var(--e-border); }
 
 /* Questions */
 .q {
@@ -336,11 +344,12 @@ button { cursor: pointer; touch-action: manipulation; }
   flex-shrink: 0;
 }
 
-.pillar.spiritual .q-check { --check-color: var(--e-border); }
-.pillar.health    .q-check { --check-color: var(--st-border); }
-.pillar.strategy  .q-check { --check-color: var(--s-border); }
-.pillar.financial .q-check { --check-color: var(--f-border); }
-.pillar.enjoyment .q-check { --check-color: var(--h-border); }
+.pillar.prerequisite .q-check { --check-color: var(--p-border); }
+.pillar.spiritual    .q-check { --check-color: var(--s-border); }
+.pillar.health       .q-check { --check-color: var(--h-border); }
+.pillar.strategy     .q-check { --check-color: var(--st-border); }
+.pillar.financial    .q-check { --check-color: var(--f-border); }
+.pillar.enjoyment    .q-check { --check-color: var(--e-border); }
 
 .q-body { flex: 1; min-width: 0; }
 .q-text {
@@ -1059,10 +1068,6 @@ input[type="time"].input-text { font-family: inherit; }
 }
 .custom-row .var-btn { min-height: 36px; }
 
-/* Prerequisite pillar styling */
-.pillar.prerequisite .pillar-head { background: #f0e8d6; border-bottom: 1px solid var(--gold-deep); }
-.pillar.prerequisite .pillar-name { color: var(--gold-deep); }
-.pillar.prerequisite .q-check { --check-color: var(--gold-deep); }
 
 /* Misc */
 .empty-state {

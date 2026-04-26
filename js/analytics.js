@@ -49,6 +49,11 @@ async function renderAnalyticsView(container) {
   container.appendChild(wxCard);
   renderWeatherInfluence(wxCard, all);
 
+  // E: Correlation Exploration — pick one, see ranked relationships
+  const expCard = card('Correlation Exploration');
+  container.appendChild(expCard);
+  renderCorrelationExploration(expCard, all);
+
   // Defer chart drawing until DOM attached
   setTimeout(async () => {
     await drawDailyScoreChart(all);
@@ -357,6 +362,139 @@ function renderCorrelationExplorer(parent, all) {
   renderList();
   updateLagExplain();
   setTimeout(recompute, 0);
+}
+
+let _expState = { picked: null, lag: 0, search: '' };
+
+function renderCorrelationExploration(parent, all) {
+  const catalog = buildVariableCatalog();
+
+  const picked = document.createElement('div');
+  picked.className = 'axis-card';
+  picked.style.marginBottom = '10px';
+  parent.appendChild(picked);
+
+  const search = document.createElement('input');
+  search.className = 'var-search';
+  search.placeholder = 'Pick a variable to explore…';
+  search.value = _expState.search;
+  parent.appendChild(search);
+
+  const list = document.createElement('div');
+  list.className = 'var-list';
+  list.style.maxHeight = '220px';
+  parent.appendChild(list);
+
+  const lagWrap = document.createElement('div');
+  lagWrap.className = 'lag-wrap';
+  lagWrap.style.marginTop = '12px';
+  lagWrap.innerHTML = `
+    <div class="lag-label">Day lag: <span id="exp-lag-val">${_expState.lag}</span> day${_expState.lag === 1 ? '' : 's'}</div>
+    <input type="range" min="0" max="30" step="1" value="${_expState.lag}" id="exp-lag-input" class="slider-input" style="--c:#8a6840;">
+    <div class="muted" style="font-size:12px;line-height:1.5;">Use lag to find lead/lag patterns: pick X, then see what other variables it predicted N days later.</div>
+  `;
+  parent.appendChild(lagWrap);
+
+  const ranked = document.createElement('div');
+  ranked.className = 'var-list';
+  ranked.style.marginTop = '12px';
+  parent.appendChild(ranked);
+
+  function updatePicked() {
+    if (!_expState.picked) {
+      picked.innerHTML = '<div class="axis-label">Picked variable</div><div class="axis-empty">Tap a variable below</div>';
+    } else {
+      const v = catalog.find((c) => c.id === _expState.picked);
+      picked.innerHTML = `<div class="axis-label">Picked variable</div><div class="axis-value">${escapeHtml(v?.name || '?')}</div>`;
+    }
+  }
+  updatePicked();
+
+  function renderList() {
+    const q = _expState.search.toLowerCase();
+    const filtered = catalog.filter((v) => !q || v.name.toLowerCase().includes(q));
+    list.innerHTML = '';
+    let lastGroup = null;
+    for (const v of filtered) {
+      if (v.group !== lastGroup) {
+        const h = document.createElement('div');
+        h.className = 'section-title';
+        h.style.padding = '8px 12px 0';
+        h.style.margin = '0';
+        h.textContent = v.group;
+        list.appendChild(h);
+        lastGroup = v.group;
+      }
+      const item = document.createElement('div');
+      item.className = 'var-item';
+      const isPicked = _expState.picked === v.id;
+      item.innerHTML = `
+        <div style="flex:1;min-width:0;">${escapeHtml(v.name)}</div>
+        <button class="var-btn ${isPicked ? 'on' : ''}" style="${isPicked ? 'background:var(--gold);color:white;' : ''}">Pick</button>
+      `;
+      item.querySelector('button').addEventListener('click', () => {
+        _expState.picked = isPicked ? null : v.id;
+        updatePicked();
+        renderList();
+        recompute();
+      });
+      list.appendChild(item);
+    }
+  }
+  renderList();
+
+  function recompute() {
+    if (!_expState.picked) { ranked.innerHTML = '<div class="empty-state">Pick a variable above to rank correlations.</div>'; return; }
+    const pick = catalog.find((c) => c.id === _expState.picked);
+    if (!pick) return;
+    const lag = _expState.lag || 0;
+    // Filter to last 30 days
+    const today30 = new Date();
+    today30.setDate(today30.getDate() - 30);
+    const cutoffISO = today30.toISOString().slice(0, 10);
+    const recent = all.filter((r) => r.date >= cutoffISO);
+    if (recent.length < 5) {
+      ranked.innerHTML = '<div class="empty-state">Need at least 5 days of recent data.</div>';
+      return;
+    }
+    const rows = [];
+    for (const other of catalog) {
+      if (other.id === pick.id) continue;
+      const pairs = buildPairs(recent, [pick], [other], lag);
+      if (pairs.length < 5) continue;
+      const r = pearson(pairs.map((p) => p.x), pairs.map((p) => p.y));
+      if (r == null) continue;
+      rows.push({ name: other.name, group: other.group, r, n: pairs.length });
+    }
+    rows.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+    if (!rows.length) { ranked.innerHTML = '<div class="empty-state">No variable pairs had enough data.</div>'; return; }
+    ranked.innerHTML = rows.map((row) => {
+      const pct = Math.round(row.r * 100);
+      const dir = row.r >= 0 ? 'positive' : 'negative';
+      const colorClass = Math.abs(row.r) >= 0.6 ? 'high' : Math.abs(row.r) >= 0.3 ? 'mid' : 'low';
+      return `
+        <div class="var-item">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:14px;">${escapeHtml(row.name)}</div>
+            <div class="muted" style="font-size:11px;">${row.group} · n=${row.n} · ${dir}</div>
+          </div>
+          <div class="q-streak ${colorClass}" style="font-variant-numeric:tabular-nums;">${pct >= 0 ? '+' : ''}${pct}%</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  search.addEventListener('input', () => {
+    _expState.search = search.value;
+    renderList();
+  });
+  lagWrap.querySelector('#exp-lag-input').addEventListener('input', (e) => {
+    _expState.lag = parseInt(e.target.value, 10);
+    lagWrap.querySelector('#exp-lag-val').textContent = _expState.lag;
+    recompute();
+  });
+
+  recompute();
 }
 
 function renderWeatherInfluence(parent, all) {

@@ -25,7 +25,7 @@ async function renderDayEditor(record, opts = {}) {
     <div class="score-row score-row-3">
       <div><div class="score-label">to Beat</div><div class="score-value" id="ed-beat">${scoreToBeat.toLocaleString()}</div></div>
       <div><div class="score-label">Daily Score</div><div class="score-value" id="ed-score">0</div></div>
-      <div><div class="score-label">All Unlocked In</div><div class="score-value proj" id="proj-current">${proj.currentText}</div></div>
+      <div><div class="score-label">Unlocked By</div><div class="score-value proj" id="proj-current">${proj.currentText}</div></div>
     </div>
     <div class="proj-row">
       <div class="proj-line"><span class="proj-label">Unlocked:</span> ${unlockedCount} / ${QUESTIONS.length}</div>
@@ -430,6 +430,41 @@ async function renderDayEditor(record, opts = {}) {
   wrap.addEventListener('record-saved', () => { renderLastEdited(); updateProgress(); });
 
   return { element: wrap, refreshLastEdited: renderLastEdited };
+}
+
+async function computeMomentum(dateISO) {
+  const all = await getAllDays();
+  const past6 = all.filter((r) => r.date < dateISO).slice(-6);
+  if (past6.length < 2) return null;
+  const past6Scores = [];
+  for (const r of past6) past6Scores.push((await scoreForRecord(r)).score);
+  const sumPast6 = past6Scores.reduce((s, x) => s + x, 0);
+  const sortedDesc = [...past6Scores].sort((a, b) => b - a);
+  const top2 = sortedDesc.slice(0, 2);
+  const top2Sum = top2.reduce((s, x) => s + x, 0);
+  const top2Avg = top2.length ? top2Sum / top2.length : 0;
+  if (top2Sum === 0 || top2Avg === 0) return null;
+  const todayRec = all.find((r) => r.date === dateISO);
+  const todayScore = todayRec ? (await scoreForRecord(todayRec)).score : 0;
+  const momentum = (sumPast6 / (top2Sum * 3)) * (todayScore / top2Avg);
+  if (!isFinite(momentum) || momentum < 0) return 0;
+  return Math.floor(momentum * 100);
+}
+
+function momentumColor(pct) {
+  if (pct == null) return 'transparent';
+  if (pct <= 0) return '#a89070';
+  if (pct < 30) return _lerpHex('#a89070', '#d68030', pct / 30);
+  if (pct < 60) return _lerpHex('#d68030', '#e8c040', (pct - 30) / 30);
+  if (pct < 90) return _lerpHex('#e8c040', '#4a9a6a', (pct - 60) / 30);
+  return '#4a9a6a';
+}
+function _lerpHex(a, b, t) {
+  const ah = parseInt(a.slice(1), 16), bh = parseInt(b.slice(1), 16);
+  const r = Math.round(((ah >> 16) & 0xff) + (((bh >> 16) & 0xff) - ((ah >> 16) & 0xff)) * t);
+  const g = Math.round(((ah >> 8) & 0xff) + (((bh >> 8) & 0xff) - ((ah >> 8) & 0xff)) * t);
+  const c = Math.round((ah & 0xff) + ((bh & 0xff) - (ah & 0xff)) * t);
+  return '#' + ((r << 16) | (g << 8) | c).toString(16).padStart(6, '0');
 }
 
 async function computeScoreToBeat(dateISO) {

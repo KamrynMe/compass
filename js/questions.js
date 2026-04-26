@@ -192,7 +192,7 @@ async function recentCheckCounts(dateISO) {
 // Per-pillar target factor: enjoyment = 1/2, prerequisite + spiritual = 3/4, others = 2/3 of max possible (500/habit).
 function pillarTargetFactor(pillarId) {
   if (pillarId === 'enjoyment') return 0.5;
-  if (pillarId === 'prerequisite' || pillarId === 'spiritual') return 0.75;
+  if (pillarId === 'prerequisite') return 0.75;
   return 2 / 3;
 }
 function pillarTarget(pillarId) {
@@ -233,19 +233,18 @@ function _ok(c, qid) {
 async function computeUnlockedSet(dateISO, counts) {
   const c = counts || (await recentCheckCounts(dateISO));
   const unlocked = new Set();
-  // All prerequisite goals (original + custom) are always unlocked.
+  // Pass 1 — unconditional unlocks: ORIGINAL prereqs + the first non-prereq habit.
   for (const q of QUESTIONS) {
-    if (q.pillar === 'prerequisite') unlocked.add(q.id);
+    if (q.pillar === 'prerequisite' && !q.custom) unlocked.add(q.id);
   }
-  // First non-prereq habit is always unlocked.
-  // After that: each habit unlocks if its predecessor was ≥50% on at least 5 of the last 7 days.
-  let firstNonPrereqSeen = false;
-  let prevSatisfied = false;
-  for (const q of QUESTIONS) {
-    if (q.pillar === 'prerequisite') continue;
-    if (!firstNonPrereqSeen) {
-      unlocked.add(q.id);
-      firstNonPrereqSeen = true;
+  const firstNonPrereqIdx = QUESTIONS.findIndex((q) => q.pillar !== 'prerequisite');
+  if (firstNonPrereqIdx >= 0) unlocked.add(QUESTIONS[firstNonPrereqIdx].id);
+
+  // Pass 2 — chain gates everything else. Custom prereqs participate.
+  let prevSatisfied = true;
+  for (let i = 0; i < QUESTIONS.length; i++) {
+    const q = QUESTIONS[i];
+    if (unlocked.has(q.id)) {
       prevSatisfied = _ok(c, q.id);
       continue;
     }
@@ -253,7 +252,7 @@ async function computeUnlockedSet(dateISO, counts) {
       unlocked.add(q.id);
       prevSatisfied = _ok(c, q.id);
     } else {
-      break;
+      prevSatisfied = false;
     }
   }
   return unlocked;
