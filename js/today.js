@@ -23,7 +23,7 @@ async function renderDayEditor(record, opts = {}) {
   const debugOn = !!(await getSetting('debugMomentum'));
 
   const momCard = document.createElement('div');
-  momCard.className = 'card momentum-card' + (momentum != null && momentum >= 100 ? ' glow' : '');
+  momCard.className = 'momentum-card' + (momentum != null && momentum >= 100 ? ' glow' : '');
   let dbgHtml = '';
   if (debugOn && momObj?.debug) {
     const d = momObj.debug;
@@ -37,31 +37,55 @@ async function renderDayEditor(record, opts = {}) {
         <div class="mom-debug">
           <div>Past 6 days: ${past6Lines || '—'}</div>
           <div>Sum past 6: <strong>${fmt(d.sumPast6)}</strong> · Top 2: ${top2Lines || '—'} = ${fmt(d.top2Sum)} · Avg ${fmt(d.top2Avg)}</div>
-          <div>Today: <strong>${fmt(d.todayScore)}</strong></div>
-          <div>(${fmt(d.sumPast6)} ÷ (${fmt(d.top2Sum)} × 3)) × (${fmt(d.todayScore)} ÷ ${fmt(d.top2Avg)})</div>
+          <div>Today: <strong>${fmt(d.todayScore)}</strong> · Yesterday: <strong>${fmt(d.yesterdayScore)}</strong> · Avg <strong>${fmt(d.tyAvg)}</strong></div>
+          <div>(${fmt(d.sumPast6)} ÷ (${fmt(d.top2Sum)} × 3)) × (${fmt(d.tyAvg)} ÷ ${fmt(d.top2Avg)})</div>
           <div>= ${d.factorA.toFixed(3)} × ${d.factorB.toFixed(3)} × 100 = ${momentum}%</div>
         </div>
       `;
     }
   }
   momCard.innerHTML = `
-    <div class="mom-label">Momentum</div>
     <div class="mom-value-wrap"><span class="mom-value" style="color:${momCol};">${momentum == null ? '—' : momentum + '%'}</span></div>
-    ${dbgHtml}
+    <div class="mom-label-wrap"><span class="mom-label">Momentum</span></div>
+    <div class="mom-debug-slot"></div>
   `;
+  if (dbgHtml) momCard.querySelector('.mom-debug-slot').innerHTML = dbgHtml;
   wrap.appendChild(momCard);
-  // Fit the number to ~75% of the inner card width
-  requestAnimationFrame(() => {
+  fitMomentumText(momCard);
+
+  async function refreshMomentum() {
+    const m = await computeMomentum(record.date);
+    const pct = m?.pct;
     const valEl = momCard.querySelector('.mom-value');
-    const wrapEl = momCard.querySelector('.mom-value-wrap');
-    if (!valEl || !wrapEl) return;
-    const targetW = wrapEl.clientWidth * 0.75;
-    valEl.style.fontSize = '160px';
-    valEl.style.lineHeight = '1';
-    const actual = valEl.scrollWidth || 1;
-    const ratio = targetW / actual;
-    valEl.style.fontSize = (160 * ratio).toFixed(1) + 'px';
-  });
+    if (valEl) {
+      valEl.textContent = pct == null ? '—' : pct + '%';
+      valEl.style.color = momentumColor(pct);
+    }
+    momCard.classList.toggle('glow', pct != null && pct >= 100);
+    const dbg = !!(await getSetting('debugMomentum'));
+    const slot = momCard.querySelector('.mom-debug-slot');
+    if (slot) {
+      if (dbg && m?.debug && !m.debug.reason) {
+        const d = m.debug;
+        const fmt2 = (n) => Math.round(n).toLocaleString();
+        const past6Lines = (d.past6Scores || []).map((p) => `${p.date.slice(5)}: ${fmt2(p.score)}`).join(' · ');
+        const top2Lines = (d.top2 || []).map((p) => `${p.date.slice(5)} ${fmt2(p.score)}`).join(' + ');
+        slot.innerHTML = `
+          <div class="mom-debug">
+            <div>Past 6 days: ${past6Lines || '—'}</div>
+            <div>Sum past 6: <strong>${fmt2(d.sumPast6)}</strong> · Top 2: ${top2Lines || '—'} = ${fmt2(d.top2Sum)} · Avg ${fmt2(d.top2Avg)}</div>
+            <div>Today: <strong>${fmt2(d.todayScore)}</strong> · Yesterday: <strong>${fmt2(d.yesterdayScore)}</strong> · Avg <strong>${fmt2(d.tyAvg)}</strong></div>
+            <div>(${fmt2(d.sumPast6)} ÷ (${fmt2(d.top2Sum)} × 3)) × (${fmt2(d.tyAvg)} ÷ ${fmt2(d.top2Avg)})</div>
+            <div>= ${d.factorA.toFixed(3)} × ${d.factorB.toFixed(3)} × 100 = ${pct}%</div>
+          </div>`;
+      } else {
+        slot.innerHTML = '';
+      }
+    }
+    fitMomentumText(momCard);
+  }
+  // Expose so slider input handler can call it
+  wrap._refreshMomentum = refreshMomentum;
   progressCard.innerHTML = `
     <div class="progress-row">
       <div class="progress-bar"><div class="progress-fill" id="ed-progress-fill"></div></div>
@@ -234,6 +258,7 @@ async function renderDayEditor(record, opts = {}) {
       const slider = row.querySelector('.q-slider');
       const valOut = row.querySelector('.q-val');
       let preInputZero = qrec.value === 0;
+      let momTimer = null;
       slider.addEventListener('input', async () => {
         const v = parseInt(slider.value, 10);
         qrec.value = v;
@@ -245,6 +270,11 @@ async function renderDayEditor(record, opts = {}) {
         debouncedSave(record);
         autoFetchWeatherIfMissing();
         await refreshStreaksAndUnlocks();
+        clearTimeout(momTimer);
+        momTimer = setTimeout(async () => {
+          await saveDay(record);
+          if (typeof wrap._refreshMomentum === 'function') wrap._refreshMomentum();
+        }, 350);
       });
       slider.addEventListener('pointerdown', () => { preInputZero = qrec.value === 0; });
       slider.addEventListener('change', async () => {
@@ -501,13 +531,15 @@ async function computeMomentum(dateISO) {
   const top2Avg = top2.length ? top2Sum / top2.length : 0;
   const todayRec = all.find((r) => r.date === dateISO);
   const todayScore = todayRec ? (await scoreForRecord(todayRec)).score : 0;
+  const yesterdayScore = past6Scores.length ? past6Scores[past6Scores.length - 1].score : 0;
+  const tyAvg = (todayScore + yesterdayScore) / 2;
   const debug = {
-    past6Scores, sumPast6, top2, top2Sum, top2Avg, todayScore,
+    past6Scores, sumPast6, top2, top2Sum, top2Avg, todayScore, yesterdayScore, tyAvg,
     factorA: top2Sum > 0 ? sumPast6 / (top2Sum * 3) : 0,
-    factorB: top2Avg > 0 ? todayScore / top2Avg : 0,
+    factorB: top2Avg > 0 ? tyAvg / top2Avg : 0,
   };
   if (top2Sum === 0 || top2Avg === 0) return { pct: 0, debug };
-  const momentum = (sumPast6 / (top2Sum * 3)) * (todayScore / top2Avg);
+  const momentum = (sumPast6 / (top2Sum * 3)) * (tyAvg / top2Avg);
   if (!isFinite(momentum) || momentum < 0) return { pct: 0, debug };
   return { pct: Math.floor(momentum * 100), debug };
 }
@@ -607,6 +639,27 @@ async function isAwakeNow() {
   let nowAdj = minsNow;
   if (nowAdj < wakeMin) nowAdj += 24 * 60;
   return nowAdj >= wakeMin && nowAdj < windMin;
+}
+
+function fitMomentumText(card) {
+  requestAnimationFrame(() => {
+    const valEl = card.querySelector('.mom-value');
+    const labelEl = card.querySelector('.mom-label');
+    const valWrap = card.querySelector('.mom-value-wrap');
+    const labelWrap = card.querySelector('.mom-label-wrap');
+    if (valEl && valWrap) {
+      const targetW = (valWrap.clientWidth || 1) * 0.75;
+      valEl.style.fontSize = '180px';
+      const ratio = targetW / Math.max(1, valEl.scrollWidth);
+      valEl.style.fontSize = (180 * ratio).toFixed(1) + 'px';
+    }
+    if (labelEl && labelWrap) {
+      const targetW = (labelWrap.clientWidth || 1) * 0.6;
+      labelEl.style.fontSize = '60px';
+      const ratio = targetW / Math.max(1, labelEl.scrollWidth);
+      labelEl.style.fontSize = (60 * ratio).toFixed(1) + 'px';
+    }
+  });
 }
 
 function escapeHtml(s) {
