@@ -577,30 +577,52 @@ async function projectUnlockTimes() {
   const today = todayISO();
   const counts = await recentCheckCounts(today);
   const unlocked = await computeUnlockedSet(today, counts);
-  const remaining = QUESTIONS.filter((q) => !unlocked.has(q.id)).length;
-  const fastestDays = remaining * 4; // 4 days at value 100 → 7-day avg ≥ 50
-  let currentDays = null;
-  // Estimate current rate from past 30 days of unlock-counts.
+  const targetId = await getSetting('completionTarget');
+  // Determine how many sequential unlock-steps remain.
+  let stepsRemaining;
+  let label = 'Unlocked By';
+  if (targetId && QUESTIONS.find((q) => q.id === targetId)) {
+    if (unlocked.has(targetId)) {
+      return { fastestText: 'Already unlocked', currentText: 'Already unlocked' };
+    }
+    const targetIdx = QUESTIONS.findIndex((q) => q.id === targetId);
+    // Highest unlocked index in chain
+    let highestUnlockedIdx = -1;
+    for (let i = 0; i < QUESTIONS.length; i++) {
+      if (unlocked.has(QUESTIONS[i].id) && i < targetIdx) highestUnlockedIdx = i;
+    }
+    stepsRemaining = targetIdx - highestUnlockedIdx; // sequential steps to satisfy
+  } else {
+    stepsRemaining = QUESTIONS.filter((q) => !unlocked.has(q.id)).length;
+  }
+  if (stepsRemaining <= 0) {
+    return { fastestText: 'Done', currentText: 'Done' };
+  }
+  // Each unlock requires the predecessor to be ≥50% on 5 of 7 days → 5 calendar days fastest.
+  const fastestDays = stepsRemaining * 5;
+  // Compute observed probability p of hitting ≥50% on a given (goal, day) over last 7 days.
+  let p = 0;
   const all = await getAllDays();
-  if (all.length >= 8) {
-    const lookback = 30;
-    const today30 = new Date(today + 'T00:00:00');
-    today30.setDate(today30.getDate() - lookback);
-    const lookbackISO = today30.toISOString().slice(0, 10);
-    const oldCounts = await recentCheckCounts(lookbackISO);
-    const oldUnlocked = await computeUnlockedSet(lookbackISO, oldCounts);
-    const gained = unlocked.size - oldUnlocked.size;
-    if (gained > 0) {
-      const ratePerDay = gained / lookback;
-      currentDays = remaining / ratePerDay;
+  const last7 = all.slice(-7);
+  let hits = 0, totalObs = 0;
+  for (const r of last7) {
+    if (!r.questions) continue;
+    for (const q of QUESTIONS) {
+      const qr = r.questions[q.id];
+      if (!qr) continue;
+      const v = qr.value != null ? qr.value : (qr.checked ? 100 : 0);
+      // only count goals that were actually accessible (have any value or note recorded)
+      if (qr.value != null || qr.checked === true || qr.checked === false) {
+        totalObs++;
+        if (v >= 50) hits++;
+      }
     }
   }
-  if (!currentDays || !isFinite(currentDays) || currentDays <= 0) {
-    currentDays = fastestDays;
-  }
+  if (totalObs > 0) p = hits / totalObs;
+  const currentDays = p > 0 ? Math.ceil(stepsRemaining * (5 / p)) : Infinity;
   return {
-    fastestText: remaining === 0 ? 'Done' : addDaysFmt(fastestDays),
-    currentText: remaining === 0 ? 'Done' : addDaysFmt(Math.ceil(currentDays)),
+    fastestText: addDaysFmt(fastestDays),
+    currentText: !isFinite(currentDays) || currentDays <= 0 ? addDaysFmt(fastestDays) : addDaysFmt(currentDays),
   };
 }
 

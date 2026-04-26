@@ -66,6 +66,28 @@ async function renderSettingsView(container) {
     showToast(e.target.checked ? 'Debug on' : 'Debug off');
   });
 
+  // Completion target — drives the "Unlocked By" projection on Today
+  const targetSel = (await getSetting('completionTarget')) || '';
+  const cardCT = document.createElement('div');
+  cardCT.className = 'card';
+  const opts = QUESTIONS.map((q) => `<option value="${q.id}" ${q.id === targetSel ? 'selected' : ''}>${q.displayNum}. ${escapeHtml((q.emoji || '') + ' ' + q.text).slice(0, 70)}</option>`).join('');
+  cardCT.innerHTML = `
+    <h3>Completion Target</h3>
+    <div class="setting-help">Pick a goal that defines "completion" for the projected and fastest unlock dates on the Today tab. If unset, the target is unlocking ALL goals.</div>
+    <div class="setting-row">
+      <select class="input-text" id="ct-sel">
+        <option value="">— All goals (default) —</option>
+        ${opts}
+      </select>
+    </div>
+  `;
+  container.appendChild(cardCT);
+  cardCT.querySelector('#ct-sel').addEventListener('change', async (e) => {
+    const v = e.target.value || null;
+    await setSetting('completionTarget', v);
+    showToast(v ? 'Target saved' : 'Target cleared');
+  });
+
   const cardW = document.createElement('div');
   cardW.className = 'card';
   const wDerived = winddownFromWake(wakeT);
