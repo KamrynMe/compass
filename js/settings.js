@@ -1,3 +1,11 @@
+function time12h(hhmm) {
+  if (!hhmm || !hhmm.includes(':')) return hhmm || '';
+  const [h, m] = hhmm.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = ((h + 11) % 12) + 1;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
 async function renderSettingsView(container) {
   container.innerHTML = '';
   const header = document.createElement('div');
@@ -20,15 +28,15 @@ async function renderSettingsView(container) {
   cardW.className = 'card';
   const wDerived = winddownFromWake(wakeT);
   cardW.innerHTML = `
-    <h3>Wake Time</h3>
+    <h3>Wake-up Time</h3>
     <div class="setting-help">Wind-down is automatic at wake + 14h. Score earns up to 5× early in the day.</div>
     <div class="setting-row">
-      <div class="setting-label">Wake Time</div>
+      <div class="setting-label">Wake-up Time</div>
       <input class="input-text" type="time" step="300" id="wake-time" value="${wakeT}">
     </div>
     <div class="setting-row">
       <div class="setting-label">Wind-Down (auto)</div>
-      <div id="wind-derived" class="muted" style="font-size:16px;font-weight:600;">${wDerived}</div>
+      <div id="wind-derived" class="muted" style="font-size:16px;font-weight:600;">${time12h(wDerived)}</div>
     </div>
     <div class="row-buttons">
       <button class="btn-secondary" id="wake-default">Default (5:00 am)</button>
@@ -37,7 +45,7 @@ async function renderSettingsView(container) {
   `;
   container.appendChild(cardW);
   cardW.querySelector('#wake-time').addEventListener('input', (e) => {
-    cardW.querySelector('#wind-derived').textContent = winddownFromWake(e.target.value);
+    cardW.querySelector('#wind-derived').textContent = time12h(winddownFromWake(e.target.value));
   });
   cardW.querySelector('#wake-default').addEventListener('click', () => {
     cardW.querySelector('#wake-time').value = '05:00';
@@ -98,11 +106,16 @@ async function renderSettingsView(container) {
       <input class="input-text" type="time" step="300" id="rem-time" value="${reminder || ''}">
     </div>
     <div class="row-buttons">
+      <button class="btn-secondary" id="rem-wake">Set to Wake-up Time</button>
       <button class="btn-secondary" id="rem-perm">Enable Notifications</button>
       <button class="btn-primary" id="rem-save">Save Reminder</button>
     </div>
   `;
   container.appendChild(card2);
+  card2.querySelector('#rem-wake').addEventListener('click', () => {
+    const w = cardW.querySelector('#wake-time').value || wakeT;
+    card2.querySelector('#rem-time').value = w;
+  });
   card2.querySelector('#rem-perm').addEventListener('click', async () => {
     if (!('Notification' in window)) { showToast('Notifications not supported'); return; }
     const r = await Notification.requestPermission();

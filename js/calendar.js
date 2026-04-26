@@ -95,9 +95,20 @@ async function renderCalendarView(container) {
     if (dateISO === today) cell.classList.add('today');
 
     const pct = rec ? overallCompletion(rec) : 0;
-    const bg = rec ? colorForPct(pct) : 'transparent';
+    const isPast = dateISO < today;
+    let bg;
+    if (rec) {
+      bg = colorForPct(pct);
+    } else if (isPast) {
+      bg = '#cfc6b8'; // greyscale of 0% pigment
+    } else {
+      bg = 'transparent';
+    }
     cell.style.background = bg;
-    if (pct >= 50) cell.style.color = 'white';
+    // White text on darker cells for contrast
+    if (rec && pct >= 33) cell.style.color = 'white';
+    else if (rec && pct === 0) cell.style.color = 'white'; // also white on the brown 0% fill
+    else if (!rec && isPast) cell.style.color = '#5a5040';
 
     // Blue outline if last edit was within 48h after the day's end (i.e. NOT a late edit)
     if (rec && rec.lastEditedAt && !isLateEdit(rec)) cell.classList.add('timely');

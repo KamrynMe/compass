@@ -128,6 +128,16 @@ function drawScoreTrend(all) {
     spanGaps: true,
     pointRadius: 2,
   }));
+  datasets.push({
+    label: 'Overall Completion %',
+    data: days.map((d) => d.record ? overallCompletion(d.record) : null),
+    borderColor: '#4a7ab0',
+    backgroundColor: 'rgba(74,122,176,0.18)',
+    borderDash: [4, 4],
+    tension: 0.25,
+    spanGaps: true,
+    pointRadius: 2,
+  });
   _charts.trend = new Chart(ctx, {
     type: 'line',
     data: { labels, datasets },
@@ -188,12 +198,28 @@ function renderCorrelationExplorer(parent, all) {
   lagWrap.innerHTML = `
     <div class="lag-label">X-axis lag: <span id="lag-val">${_corrState.lag}</span> day${_corrState.lag === 1 ? '' : 's'}</div>
     <input type="range" min="0" max="30" step="1" value="${_corrState.lag}" id="lag-input" class="slider-input" style="--c:#8a5ab0;">
-    <div class="muted" style="font-size:12px;">When > 0, X is taken from N days before each Y date — useful for "did sleep N days ago predict mood today?"</div>
+    <div class="muted" id="lag-explain" style="font-size:12px;line-height:1.5;"></div>
   `;
   parent.appendChild(lagWrap);
+  function updateLagExplain() {
+    const xNames = _corrState.x.map((id) => catalog.find((c) => c.id === id)?.name || id);
+    const yNames = _corrState.y.map((id) => catalog.find((c) => c.id === id)?.name || id);
+    const xLabel = xNames.length ? (xNames.length === 1 ? xNames[0] : `Avg of ${xNames.length} X variables`) : 'X variable';
+    const yLabel = yNames.length ? (yNames.length === 1 ? yNames[0] : `Avg of ${yNames.length} Y variables`) : 'Y variable';
+    const expl = lagWrap.querySelector('#lag-explain');
+    if (!expl) return;
+    if (_corrState.lag === 0) {
+      expl.textContent = `Comparing "${xLabel}" and "${yLabel}" on the SAME day.`;
+    } else {
+      const d = _corrState.lag;
+      const dayWord = d === 1 ? 'day' : 'days';
+      expl.textContent = `Comparing "${xLabel}" from ${d} ${dayWord} BEFORE each day's "${yLabel}". Example: ${xLabel} on day D paired with ${yLabel} on day D + ${d}.`;
+    }
+  }
   lagWrap.querySelector('#lag-input').addEventListener('input', (e) => {
     _corrState.lag = parseInt(e.target.value, 10);
     lagWrap.querySelector('#lag-val').textContent = _corrState.lag;
+    updateLagExplain();
     recompute();
   });
 
@@ -239,6 +265,7 @@ function renderCorrelationExplorer(parent, all) {
     }
     refreshAxisLabels();
     renderList();
+    if (typeof updateLagExplain === 'function') updateLagExplain();
     recompute();
   }
 
@@ -294,7 +321,7 @@ function renderCorrelationExplorer(parent, all) {
       result.innerHTML = '<div class="r-text">Not enough variation to compute.</div>';
     } else {
       result.innerHTML = `
-        <div class="r-value">r = ${r.toFixed(2)}</div>
+        <div class="r-value">r = ${r.toFixed(1)}</div>
         <div class="r-text">${interpretR(r)} &nbsp;·&nbsp; n=${pairs.length}</div>
       `;
     }
@@ -327,6 +354,7 @@ function renderCorrelationExplorer(parent, all) {
 
   refreshAxisLabels();
   renderList();
+  updateLagExplain();
   setTimeout(recompute, 0);
 }
 
@@ -356,7 +384,7 @@ function renderWeatherInfluence(parent, all) {
         if (wv != null && sv != null) { xs.push(wv); ys.push(sv); }
       }
       const r = xs.length >= 5 ? pearson(xs, ys) : null;
-      html += `<td>${r == null ? '—' : r.toFixed(2)}</td>`;
+      html += `<td>${r == null ? '—' : r.toFixed(1)}</td>`;
     }
     html += '</tr>';
   }

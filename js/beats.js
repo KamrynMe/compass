@@ -16,8 +16,8 @@ const WAVES = [
     note: 'E4 carrier — alert without stress, no pulsation for stability',
     carrier: 329.63, beat: 18, pulsate: false, color: '#c9a84c' },
   { id: 'gamma', name: 'Gamma', range: '40 Hz', use: 'Deep analysis, integration, planning',
-    note: 'A4 carrier — clean and precise, no pulsation',
-    carrier: 440.00, beat: 40, pulsate: false, color: '#c05050' },
+    note: 'A5 carrier (880 Hz) — clean, precise, true pitch with wide beat',
+    carrier: 880.00, beat: 40, pulsate: false, color: '#c05050' },
 ];
 
 const _beats = {
@@ -34,7 +34,8 @@ function _ensureCtx() {
   if (!_beats.ctx) {
     const Ctor = window.AudioContext || window.webkitAudioContext;
     if (!Ctor) return null;
-    _beats.ctx = new Ctor();
+    // latencyHint: 'playback' encourages mixing with other audio (Spotify etc) on iOS
+    _beats.ctx = new Ctor({ latencyHint: 'playback' });
   }
   if (_beats.ctx.state === 'suspended') _beats.ctx.resume();
   return _beats.ctx;
@@ -183,6 +184,7 @@ async function renderBeatsView(container) {
       <div class="beat-range">Beat ${w.range}${w.pulsate ? ' · pulsed' : ''}</div>
       <div class="beat-use">${w.use}</div>
       <div class="beat-note">${w.note}</div>
+      <div class="beat-countdown" data-wave="${w.id}" style="display:none;"></div>
     `;
     btn.addEventListener('click', () => {
       if (_beats.active === w.id) stopBeats(true);
@@ -191,10 +193,29 @@ async function renderBeatsView(container) {
     });
     grid.appendChild(btn);
   }
+  let cdTimer = null;
   function refreshActive() {
     grid.querySelectorAll('.beat-btn').forEach((b) => {
       b.classList.toggle('active', b.dataset.wave === _beats.active);
     });
+    grid.querySelectorAll('.beat-countdown').forEach((el) => { el.style.display = 'none'; el.textContent = ''; });
+    if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
+    if (_beats.active && _beats.durationSec > 0 && _beats.stopTimer) {
+      const cdEl = grid.querySelector(`.beat-countdown[data-wave="${_beats.active}"]`);
+      const endAt = Date.now() + _beats.durationSec * 1000;
+      const fmtCd = (s) => {
+        const m = Math.floor(s / 60);
+        const r = s % 60;
+        return m > 0 ? `${m}:${String(r).padStart(2, '0')}` : `${r}s`;
+      };
+      const tick = () => {
+        const left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+        if (cdEl) { cdEl.style.display = ''; cdEl.textContent = '⏳ ' + fmtCd(left); }
+        if (left <= 0) { clearInterval(cdTimer); refreshActive(); }
+      };
+      tick();
+      cdTimer = setInterval(tick, 1000);
+    }
   }
   refreshActive();
 
@@ -204,7 +225,7 @@ async function renderBeatsView(container) {
     <h3>Volume & Duration</h3>
     <div class="setting-row">
       <div class="setting-label">Volume: <span id="beat-vol-val">${Math.round(_beats.volume*100)}%</span></div>
-      <input class="slider-input" type="range" min="0" max="40" step="1" value="${Math.round(_beats.volume*100)}" id="beat-vol" style="--c:#4a9a6a">
+      <input class="slider-input" type="range" min="1" max="40" step="1" value="${Math.max(1, Math.round(_beats.volume*100))}" id="beat-vol" style="--c:#4a9a6a">
     </div>
     <div class="setting-row">
       <div class="setting-label">Auto-stop</div>
@@ -238,6 +259,7 @@ async function renderBeatsView(container) {
       if (_beats.stopTimer) clearTimeout(_beats.stopTimer);
       _beats.stopTimer = setTimeout(() => { stopBeats(false); refreshActive(); }, _beats.durationSec * 1000);
     }
+    refreshActive();
   });
   ctrlCard.querySelector('#beat-stop').addEventListener('click', () => {
     stopBeats(true);

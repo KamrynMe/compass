@@ -1,6 +1,6 @@
 {
-  "name": "Compass",
-  "short_name": "Compass",
+  "name": "Compass Habits",
+  "short_name": "Compass Habits",
   "description": "Daily life navigation",
   "start_url": "./index.html",
   "scope": "./",

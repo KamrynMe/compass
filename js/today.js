@@ -15,14 +15,21 @@ async function renderDayEditor(record, opts = {}) {
   // Header card: progress bar, daily score, unlocked count, score-change countdown
   const progressCard = document.createElement('div');
   progressCard.className = 'card';
+  const scoreToBeat = await computeScoreToBeat(record.date);
+  const proj = await projectUnlockTimes();
   progressCard.innerHTML = `
     <div class="progress-row">
       <div class="progress-bar"><div class="progress-fill" id="ed-progress-fill"></div></div>
       <div class="progress-label" id="ed-progress-label">0 / ${unlockedCount}</div>
     </div>
-    <div class="score-row">
+    <div class="score-row score-row-3">
       <div><div class="score-label">Daily Score</div><div class="score-value" id="ed-score">0</div></div>
+      <div><div class="score-label">Score to Beat</div><div class="score-value" id="ed-beat">${scoreToBeat.toLocaleString()}</div></div>
       <div><div class="score-label">Unlocked</div><div class="score-value" id="ed-unlocked">${unlockedCount} / ${QUESTIONS.length}</div></div>
+    </div>
+    <div class="proj-row">
+      <div class="proj-line"><span class="proj-label">All-unlock at current rate:</span> <span id="proj-current">${proj.currentText}</span></div>
+      <div class="proj-line"><span class="proj-label">Fastest possible:</span> <span id="proj-fast">${proj.fastestText}</span></div>
     </div>
     <div class="score-tick-row" id="ed-tick">Next per-habit −1 in <span id="ed-tick-val">—</span></div>
   `;
@@ -132,8 +139,9 @@ async function renderDayEditor(record, opts = {}) {
   for (const p of PILLARS) {
     const qs = questionsByPillar(p.id);
     if (!qs.length) continue;
+    const anyUnlocked = qs.some((q) => unlocked.has(q.id));
     const pillar = document.createElement('div');
-    pillar.className = 'pillar ' + p.id;
+    pillar.className = 'pillar ' + p.id + (anyUnlocked ? '' : ' collapsed');
     pillar.innerHTML = `
       <div class="pillar-head">
         <div>
@@ -191,6 +199,10 @@ async function renderDayEditor(record, opts = {}) {
         autoFetchWeatherIfMissing();
         await refreshStreaksAndUnlocks();
       });
+      slider.addEventListener('change', () => {
+        // Satisfying release animation regardless of current value
+        if (qrec.value > 0) flashCheck(row);
+      });
 
       const noteInput = row.querySelector('.q-noteinput');
       const expandBtn = row.querySelector('.q-expand');
@@ -209,17 +221,66 @@ async function renderDayEditor(record, opts = {}) {
     wrap.appendChild(pillar);
   }
 
-  // Intentions
+  // Today's Notes — text + up to 10 images
+  if (!Array.isArray(record.images)) record.images = [];
   const intCard = document.createElement('div');
   intCard.className = 'card';
   intCard.innerHTML = `
-    <h3>Today's Intentions</h3>
-    <textarea class="intentions" id="ed-intentions" placeholder="What matters most today…">${escapeHtml(record.intentions || '')}</textarea>
+    <h3>Today's Notes</h3>
+    <textarea class="intentions" id="ed-intentions" placeholder="What's on your mind today…">${escapeHtml(record.intentions || '')}</textarea>
+    <div class="img-strip" id="ed-img-strip"></div>
+    <div class="row-buttons" style="margin-top:8px;">
+      <button class="btn-secondary" id="ed-img-add">📷 Add photo (${record.images.length} / 10)</button>
+      <input type="file" id="ed-img-file" accept="image/*" multiple style="display:none;">
+    </div>
   `;
   wrap.appendChild(intCard);
   const intArea = intCard.querySelector('#ed-intentions');
   intArea.addEventListener('input', () => {
     record.intentions = intArea.value;
+    debouncedSave(record);
+  });
+  const strip = intCard.querySelector('#ed-img-strip');
+  function paintImages() {
+    strip.innerHTML = '';
+    for (const img of record.images) {
+      const t = document.createElement('div');
+      t.className = 'img-thumb';
+      t.innerHTML = `<img src="${img.dataUrl}" alt=""><button class="img-del" aria-label="Delete">×</button>`;
+      t.querySelector('.img-del').addEventListener('click', () => {
+        record.images = record.images.filter((x) => x.id !== img.id);
+        intCard.querySelector('#ed-img-add').textContent = `📷 Add photo (${record.images.length} / 10)`;
+        paintImages();
+        debouncedSave(record);
+      });
+      t.querySelector('img').addEventListener('click', () => {
+        const overlay = document.createElement('div');
+        overlay.className = 'img-overlay';
+        overlay.innerHTML = `<img src="${img.dataUrl}" alt="">`;
+        overlay.addEventListener('click', () => overlay.remove());
+        document.body.appendChild(overlay);
+      });
+      strip.appendChild(t);
+    }
+  }
+  paintImages();
+  const fileIn = intCard.querySelector('#ed-img-file');
+  intCard.querySelector('#ed-img-add').addEventListener('click', () => {
+    if (record.images.length >= 10) { showToast('Limit of 10 photos per day'); return; }
+    fileIn.click();
+  });
+  fileIn.addEventListener('change', async () => {
+    const files = Array.from(fileIn.files || []);
+    for (const f of files) {
+      if (record.images.length >= 10) break;
+      try {
+        const dataUrl = await compressImage(f, 1280, 0.78);
+        record.images.push({ id: 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), dataUrl, takenAt: new Date().toISOString() });
+      } catch (e) { showToast('Image add failed'); }
+    }
+    fileIn.value = '';
+    intCard.querySelector('#ed-img-add').textContent = `📷 Add photo (${record.images.length} / 10)`;
+    paintImages();
     debouncedSave(record);
   });
 
@@ -314,6 +375,7 @@ async function renderDayEditor(record, opts = {}) {
     const dropEvery = secondsUntilNextPointDrop();
     let secs = dropEvery;
     const tickEl = wrap.querySelector('#ed-tick-val');
+    const tickRow = wrap.querySelector('#ed-tick');
     function fmt(s) {
       const m = Math.floor(s / 60);
       const r = s % 60;
@@ -321,6 +383,18 @@ async function renderDayEditor(record, opts = {}) {
     }
     if (tickEl) tickEl.textContent = fmt(secs);
     scoreTickTimer = setInterval(async () => {
+      const awake = await isAwakeNow();
+      if (!awake) {
+        if (tickRow) {
+          tickRow.classList.add('sleep');
+          tickRow.innerHTML = '😴 Sleep window — score paused';
+        }
+        return;
+      }
+      if (tickRow && tickRow.classList.contains('sleep')) {
+        tickRow.classList.remove('sleep');
+        tickRow.innerHTML = `Next per-habit −1 in <span id="ed-tick-val">${fmt(secs)}</span>`;
+      }
       secs--;
       if (secs <= 0) {
         secs = dropEvery;
@@ -330,7 +404,8 @@ async function renderDayEditor(record, opts = {}) {
           if (row) await renderPointsBadge(row, q.id);
         }
       }
-      if (tickEl) tickEl.textContent = fmt(secs);
+      const liveEl = wrap.querySelector('#ed-tick-val');
+      if (liveEl) liveEl.textContent = fmt(secs);
     }, 1000);
   }
   startTicker();
@@ -347,6 +422,80 @@ async function renderDayEditor(record, opts = {}) {
   wrap.addEventListener('record-saved', () => { renderLastEdited(); updateProgress(); });
 
   return { element: wrap, refreshLastEdited: renderLastEdited };
+}
+
+async function computeScoreToBeat(dateISO) {
+  const all = await getAllDays();
+  const past = all.filter((r) => r.date < dateISO);
+  if (past.length < 2) return 99;
+  const last2 = past.slice(-2);
+  let sum = 0;
+  for (const r of last2) {
+    const s = await scoreForRecord(r);
+    sum += s.score;
+  }
+  return Math.ceil(sum / 2);
+}
+
+async function projectUnlockTimes() {
+  const today = todayISO();
+  const counts = await recentCheckCounts(today);
+  const unlocked = await computeUnlockedSet(today, counts);
+  const remaining = QUESTIONS.filter((q) => !unlocked.has(q.id)).length;
+  const fastestDays = remaining * 4; // 4 days at value 100 → 7-day avg ≥ 50
+  let currentDays = null;
+  // Estimate current rate from past 30 days of unlock-counts.
+  const all = await getAllDays();
+  if (all.length >= 8) {
+    const lookback = 30;
+    const today30 = new Date(today + 'T00:00:00');
+    today30.setDate(today30.getDate() - lookback);
+    const lookbackISO = today30.toISOString().slice(0, 10);
+    const oldCounts = await recentCheckCounts(lookbackISO);
+    const oldUnlocked = await computeUnlockedSet(lookbackISO, oldCounts);
+    const gained = unlocked.size - oldUnlocked.size;
+    if (gained > 0) {
+      const ratePerDay = gained / lookback;
+      currentDays = remaining / ratePerDay;
+    }
+  }
+  if (!currentDays || !isFinite(currentDays) || currentDays <= 0) {
+    currentDays = fastestDays;
+  }
+  return {
+    fastestText: remaining === 0 ? 'All unlocked!' : daysToYMD(fastestDays),
+    currentText: remaining === 0 ? 'All unlocked!' : daysToYMD(Math.ceil(currentDays)),
+  };
+}
+
+function daysToYMD(days) {
+  if (!days || days <= 0) return '0d';
+  const y = Math.floor(days / 365);
+  const rem1 = days - y * 365;
+  const m = Math.floor(rem1 / 30);
+  const d = rem1 - m * 30;
+  const parts = [];
+  if (y >= 1) parts.push(y + 'y');
+  if (m >= 1) parts.push(m + 'mo');
+  if (d >= 1 || parts.length === 0) parts.push(d + 'd');
+  return parts.join(' ');
+}
+
+// Is the current local time within the user's waking window?
+async function isAwakeNow() {
+  const wake = (await getSetting('wakeTime')) || '05:00';
+  const wind = winddownFromWake(wake);
+  const [wh, wm] = wake.split(':').map(Number);
+  const [dh, dm] = wind.split(':').map(Number);
+  const now = new Date();
+  const minsNow = now.getHours() * 60 + now.getMinutes();
+  const wakeMin = wh * 60 + wm;
+  let windMin = dh * 60 + dm;
+  // wake → wind always 14h forward
+  if (windMin <= wakeMin) windMin += 24 * 60;
+  let nowAdj = minsNow;
+  if (nowAdj < wakeMin) nowAdj += 24 * 60;
+  return nowAdj >= wakeMin && nowAdj < windMin;
 }
 
 function escapeHtml(s) {

@@ -58,6 +58,32 @@ function showPointsPop(rowEl, points) {
   setTimeout(() => pop.remove(), 1400);
 }
 
+// Compress an image File to a JPEG data URL via canvas.
+async function compressImage(file, maxDim = 1280, quality = 0.78) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = reject;
+    i.src = dataUrl;
+  });
+  let w = img.width, h = img.height;
+  if (Math.max(w, h) > maxDim) {
+    const s = maxDim / Math.max(w, h);
+    w = Math.round(w * s); h = Math.round(h * s);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
 // Brief flash class on a row + checkbox
 function flashCheck(rowEl) {
   const cb = rowEl.querySelector('.q-check');
