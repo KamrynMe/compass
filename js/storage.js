@@ -35,7 +35,7 @@ function reqAsPromise(req) {
 
 function emptyQuestions() {
   const out = {};
-  for (const q of QUESTIONS) out[q.id] = { checked: false, note: '', checkedAt: null };
+  for (const q of QUESTIONS) out[q.id] = { value: 0, note: '', firstSetAt: null };
   return out;
 }
 
@@ -44,7 +44,7 @@ function blankDay(date) {
     date,
     createdAt: null,
     lastEditedAt: null,
-    sliders: { oura: 0, circumstances: 0, mood: 0, productivity: 0 },
+    sliders: { circumstances: 0, mood: 0, productivity: 0 },
     weather: null,
     questions: emptyQuestions(),
     intentions: '',
@@ -67,12 +67,19 @@ async function getDay(date) {
 async function getOrInitDay(date) {
   const existing = await getDay(date);
   if (existing) {
-    // Ensure all current questions exist (forward compat)
     let mutated = false;
     for (const q of QUESTIONS) {
       if (!existing.questions[q.id]) {
-        existing.questions[q.id] = { checked: false, note: '' };
+        existing.questions[q.id] = { value: 0, note: '', firstSetAt: null };
         mutated = true;
+      } else {
+        const qr = existing.questions[q.id];
+        // Migrate checkbox era → slider value
+        if (qr.value == null) {
+          qr.value = qr.checked ? 100 : 0;
+          if (qr.checked && qr.checkedAt && !qr.firstSetAt) qr.firstSetAt = qr.checkedAt;
+          mutated = true;
+        }
       }
     }
     if (mutated) await saveDay(existing, { silent: true });
@@ -174,15 +181,21 @@ function isLateEdit(record) {
 }
 
 // Pillar completion percentage
+function _val(r, qid) {
+  const qr = r?.questions?.[qid];
+  if (!qr) return 0;
+  return qr.value != null ? qr.value : (qr.checked ? 100 : 0);
+}
 function pillarCompletion(record, pillarId) {
   if (!record) return 0;
   const qs = QUESTIONS.filter((q) => q.pillar === pillarId);
-  const checked = qs.filter((q) => record.questions[q.id] && record.questions[q.id].checked).length;
-  return qs.length ? Math.round((checked / qs.length) * 100) : 0;
+  if (!qs.length) return 0;
+  const sum = qs.reduce((s, q) => s + _val(record, q.id), 0);
+  return Math.round(sum / qs.length);
 }
-
 function overallCompletion(record) {
   if (!record) return 0;
-  const checked = QUESTIONS.filter((q) => record.questions[q.id] && record.questions[q.id].checked).length;
-  return Math.round((checked / QUESTIONS.length) * 100);
+  if (!QUESTIONS.length) return 0;
+  const sum = QUESTIONS.reduce((s, q) => s + _val(record, q.id), 0);
+  return Math.round(sum / QUESTIONS.length);
 }

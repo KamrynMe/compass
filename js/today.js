@@ -5,8 +5,14 @@ async function renderDayEditor(record, opts = {}) {
   const counts = await recentCheckCounts(record.date);
   const unlocked = await computeUnlockedSet(record.date, counts);
   const unlockedCount = unlocked.size;
+  let scoreTickTimer = null;
+  let saveTimer = null;
+  const debouncedSave = (rec) => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => onChange(rec), 250);
+  };
 
-  // Progress + score
+  // Header card: progress bar, daily score, unlocked count, score-change countdown
   const progressCard = document.createElement('div');
   progressCard.className = 'card';
   progressCard.innerHTML = `
@@ -18,28 +24,11 @@ async function renderDayEditor(record, opts = {}) {
       <div><div class="score-label">Daily Score</div><div class="score-value" id="ed-score">0</div></div>
       <div><div class="score-label">Unlocked</div><div class="score-value" id="ed-unlocked">${unlockedCount} / ${QUESTIONS.length}</div></div>
     </div>
-    <div class="next-tick" id="ed-next-tick" title="Score multiplier for new checks degrades smoothly through your waking window."></div>
+    <div class="score-tick-row" id="ed-tick">Next per-habit −1 in <span id="ed-tick-val">—</span></div>
   `;
   wrap.appendChild(progressCard);
 
-  // Live "next change" countdown
-  let _tickTimer = null;
-  async function updateNextTick() {
-    const el = wrap.querySelector('#ed-next-tick');
-    if (!el) return;
-    const wake = (await getSetting('wakeTime')) || '05:00';
-    const wind = (await getSetting('winddownTime')) || '19:00';
-    const ms = msUntilNextScoreTick(wake, wind, record.date);
-    if (ms == null) { el.textContent = 'Outside waking window — multiplier is 1×.'; return; }
-    const sec = Math.round(ms / 1000);
-    const m = Math.floor(sec / 60), s = sec % 60;
-    el.innerHTML = `<span class="next-tick-label">Next score change</span><span class="next-tick-val">${m}m ${String(s).padStart(2, '0')}s</span>`;
-    clearTimeout(_tickTimer);
-    _tickTimer = setTimeout(updateNextTick, Math.min(1000, ms));
-  }
-  setTimeout(updateNextTick, 0);
-
-  // Sliders
+  // Sliders (day scores: circumstances, mood, productivity)
   const slidersCard = document.createElement('div');
   slidersCard.className = 'card';
   slidersCard.innerHTML = `<h3>Day Scores</h3><div class="sliders" id="ed-sliders"></div>`;
@@ -57,17 +46,16 @@ async function renderDayEditor(record, opts = {}) {
     slidersBox.appendChild(row);
     const input = row.querySelector('input');
     const valOut = row.querySelector('.slider-val');
-    let timer = null;
     input.addEventListener('input', (e) => {
       const val = parseInt(e.target.value, 10);
       valOut.textContent = val;
       record.sliders[s.id] = val;
-      clearTimeout(timer);
-      timer = setTimeout(() => { onChange(record); maybeAutoFetchWeather(); }, 300);
+      debouncedSave(record);
+      autoFetchWeatherIfMissing();
     });
   }
 
-  // Weather
+  // Weather (single row, all 4 cells)
   const weatherCard = document.createElement('div');
   weatherCard.className = 'card';
   weatherCard.id = 'ed-weather-card';
@@ -77,10 +65,10 @@ async function renderDayEditor(record, opts = {}) {
     const t = (v, suf) => v == null ? '—' : v + suf;
     weatherCard.innerHTML = `
       <h3>Weather</h3>
-      <div class="weather-grid weather-grid-4">
-        <div class="weather-cell"><div class="v">${t(w?.temp6am, '°F')}</div><div class="l">6 AM</div></div>
-        <div class="weather-cell"><div class="v">${t(w?.temp3pm, '°F')}</div><div class="l">3 PM</div></div>
-        <div class="weather-cell"><div class="v">${t(w?.realFeel3pm, '°F')}</div><div class="l">3 PM Feel</div></div>
+      <div class="weather-grid weather-grid-row">
+        <div class="weather-cell"><div class="v">${t(w?.temp6am, '°')}</div><div class="l">6 AM</div></div>
+        <div class="weather-cell"><div class="v">${t(w?.temp3pm, '°')}</div><div class="l">3 PM</div></div>
+        <div class="weather-cell"><div class="v">${t(w?.realFeel3pm, '°')}</div><div class="l">3 PM Feel</div></div>
         <div class="weather-cell"><div class="v">${w?.precipitation == null ? '—' : (w.precipitation > 0 ? w.precipitation + '"' : 'None')}</div><div class="l">Precip</div></div>
       </div>
       <button class="weather-retry" id="ed-weather-fetch">Refresh weather</button>
@@ -94,19 +82,7 @@ async function renderDayEditor(record, opts = {}) {
         </div>
       </details>
     `;
-    weatherCard.querySelector('#ed-weather-fetch').addEventListener('click', async () => {
-      try {
-        const loc = await getSetting('location');
-        if (!loc || loc.lat == null) throw new Error('No location set — open Settings to add one.');
-        const w2 = await fetchWeather(loc.lat, loc.lon, record.date);
-        record.weather = w2;
-        onChange(record);
-        renderWeather();
-        showToast('Weather updated');
-      } catch (e) {
-        showToast(e.message || 'Weather fetch failed');
-      }
-    });
+    weatherCard.querySelector('#ed-weather-fetch').addEventListener('click', () => fetchWeatherNow(true));
     ['m-temp', 'm-temp3', 'm-feel', 'm-precip'].forEach((id) => {
       const el = weatherCard.querySelector('#' + id);
       el.addEventListener('change', () => {
@@ -125,10 +101,34 @@ async function renderDayEditor(record, opts = {}) {
       });
     });
   }
+  async function fetchWeatherNow(showMsg) {
+    try {
+      const loc = await getSetting('location');
+      if (!loc || loc.lat == null) {
+        if (showMsg) showToast('Set a location in Settings first');
+        return;
+      }
+      const w = await fetchWeatherForDate(loc.lat, loc.lon, record.date);
+      if (!w) { if (showMsg) showToast("That day is too far back to fetch — sorry."); return; }
+      record.weather = w;
+      onChange(record);
+      renderWeather();
+      if (showMsg) showToast('Weather updated');
+    } catch (e) {
+      if (showMsg) showToast(e.message || 'Weather fetch failed');
+    }
+  }
+  let _weatherAutoFetched = false;
+  function autoFetchWeatherIfMissing() {
+    if (_weatherAutoFetched) return;
+    _weatherAutoFetched = true;
+    if (!record.weather || record.weather.temp6am == null) {
+      fetchWeatherNow(false);
+    }
+  }
   renderWeather();
-  weatherCard._rerender = renderWeather;
 
-  // Pillars + questions (only render pillars that have ≥1 question)
+  // Pillars + habit sliders
   for (const p of PILLARS) {
     const qs = questionsByPillar(p.id);
     if (!qs.length) continue;
@@ -144,49 +144,54 @@ async function renderDayEditor(record, opts = {}) {
       </div>
       <div class="pillar-body" data-body="${p.id}"></div>
     `;
-    pillar.querySelector('.pillar-head').addEventListener('click', () => {
-      pillar.classList.toggle('collapsed');
-    });
+    pillar.querySelector('.pillar-head').addEventListener('click', () => pillar.classList.toggle('collapsed'));
     const body = pillar.querySelector('[data-body]');
     for (const q of qs) {
-      const qrec = record.questions[q.id] || { checked: false, note: '', checkedAt: null };
+      const qrec = record.questions[q.id] || (record.questions[q.id] = { value: 0, note: '', firstSetAt: null });
+      if (qrec.value == null) qrec.value = qrec.checked ? 100 : 0;
       const isUnlocked = unlocked.has(q.id);
+      const avg7 = Math.round(counts[q.id] || 0);
+      const tier = avg7 >= 50 ? 'high' : avg7 >= 30 ? 'mid' : 'low';
       const row = document.createElement('div');
-      row.className = 'q' + (q.anchor ? ' anchor' : '') + (qrec.checked ? ' checked' : '') + (isUnlocked ? '' : ' locked');
+      row.className = 'q' + (q.anchor ? ' anchor' : '') + (qrec.value > 0 ? ' checked' : '') + (isUnlocked ? '' : ' locked');
       row.dataset.qid = q.id;
-      const streak = counts[q.id] || 0;
-      let streakTier = 'low';
-      if (streak >= 5) streakTier = 'high';
-      else if (streak >= 3) streakTier = 'mid';
       row.innerHTML = `
-        <label class="q-check-tap">
-          <input type="checkbox" class="q-check" ${qrec.checked ? 'checked' : ''} ${isUnlocked ? '' : 'disabled'} data-q="${q.id}">
-        </label>
         <div class="q-body">
-          <div class="q-text"><span class="q-num">${displayNumberFor(q.id)}.</span> <span class="q-emoji">${q.emoji || ''}</span> ${escapeHtml(q.text)}${q.anchor ? ' <span class="q-star">★ Anchor</span>' : ''}${isUnlocked ? '' : ' <span class="q-lock">🔒 Locked</span>'}</div>
+          <div class="q-text"><span class="q-num">${q.displayNum}.</span> <span class="q-emoji">${q.emoji || ''}</span> ${escapeHtml(q.text)}${q.anchor ? ' <span class="q-star">★ Anchor</span>' : ''}${isUnlocked ? '' : ' <span class="q-lock">🔒 Locked</span>'}</div>
           <div class="q-note">${escapeHtml(q.note)}</div>
+          <div class="q-slider-row">
+            <input type="range" class="q-slider" min="0" max="100" step="5" value="${qrec.value}" ${isUnlocked ? '' : 'disabled'} data-q="${q.id}">
+            <span class="q-val" data-val="${q.id}">${qrec.value}</span>
+          </div>
           <div class="q-meta-row">
-            <span class="q-streak ${streakTier}" title="Checked ${streak} of the last 7 days">${streak} / 7 last 7 days</span>
+            <span class="q-streak ${tier}" title="7-day average">Avg ${avg7} / 100 last 7 days</span>
             <span class="q-points-badge" data-points="${q.id}" style="display:none;"></span>
           </div>
-          <textarea class="q-noteinput${qrec.note ? ' open' : ''}" placeholder="Add a note for ${q.id.toUpperCase()}…" data-note="${q.id}">${escapeHtml(qrec.note || '')}</textarea>
+          <textarea class="q-noteinput${qrec.note ? ' open' : ''}" placeholder="Add a note for #${q.displayNum}…" data-note="${q.id}">${escapeHtml(qrec.note || '')}</textarea>
         </div>
         <button type="button" class="q-expand${qrec.note ? ' open' : ''}" aria-label="Toggle note">+</button>
       `;
       body.appendChild(row);
 
-      const checkbox = row.querySelector('.q-check');
-      checkbox.addEventListener('change', async () => {
-        record.questions[q.id].checked = checkbox.checked;
-        record.questions[q.id].checkedAt = checkbox.checked ? new Date().toISOString() : null;
-        row.classList.toggle('checked', checkbox.checked);
-        if (checkbox.checked) { playCheckSound(); flashCheck(row); }
-        else { playUncheckSound(); }
+      const slider = row.querySelector('.q-slider');
+      const valOut = row.querySelector('.q-val');
+      slider.addEventListener('input', async () => {
+        const v = parseInt(slider.value, 10);
+        const wasZero = qrec.value === 0;
+        const isNowZero = v === 0;
+        qrec.value = v;
+        valOut.textContent = v;
+        if (v > 0 && !qrec.firstSetAt) qrec.firstSetAt = new Date().toISOString();
+        if (v === 0) qrec.firstSetAt = null;
+        row.classList.toggle('checked', v > 0);
+        if (wasZero && !isNowZero) { playCheckSound(); flashCheck(row); }
+        else if (!wasZero && isNowZero) { playUncheckSound(); }
         await renderPointsBadge(row, q.id);
-        await onChange(record);
+        debouncedSave(record);
+        autoFetchWeatherIfMissing();
         await refreshStreaksAndUnlocks();
-        maybeAutoFetchWeather();
       });
+
       const noteInput = row.querySelector('.q-noteinput');
       const expandBtn = row.querySelector('.q-expand');
       expandBtn.addEventListener('click', () => {
@@ -194,12 +199,12 @@ async function renderDayEditor(record, opts = {}) {
         expandBtn.classList.toggle('open');
         if (noteInput.classList.contains('open')) noteInput.focus();
       });
-      let noteTimer = null;
       noteInput.addEventListener('input', () => {
-        record.questions[q.id].note = noteInput.value;
-        clearTimeout(noteTimer);
-        noteTimer = setTimeout(() => onChange(record), 400);
+        qrec.note = noteInput.value;
+        debouncedSave(record);
       });
+      // Initial points badge
+      renderPointsBadge(row, q.id);
     }
     wrap.appendChild(pillar);
   }
@@ -213,11 +218,9 @@ async function renderDayEditor(record, opts = {}) {
   `;
   wrap.appendChild(intCard);
   const intArea = intCard.querySelector('#ed-intentions');
-  let intTimer = null;
   intArea.addEventListener('input', () => {
     record.intentions = intArea.value;
-    clearTimeout(intTimer);
-    intTimer = setTimeout(() => onChange(record), 400);
+    debouncedSave(record);
   });
 
   // Last edited
@@ -225,56 +228,19 @@ async function renderDayEditor(record, opts = {}) {
   lastEdited.className = 'last-edited';
   wrap.appendChild(lastEdited);
   function renderLastEdited() {
-    if (!record.lastEditedAt) {
-      lastEdited.textContent = 'Not yet saved';
-      return;
-    }
+    if (!record.lastEditedAt) { lastEdited.textContent = 'Not yet saved'; return; }
     const d = new Date(record.lastEditedAt);
     const txt = 'Last edited: ' + d.toLocaleString();
     lastEdited.innerHTML = txt + (isLateEdit(record) ? '<span class="late-badge">Late edit</span>' : '');
   }
   renderLastEdited();
 
-  async function updateProgress() {
-    const checked = QUESTIONS.filter((q) => record.questions[q.id]?.checked).length;
-    const fill = wrap.querySelector('#ed-progress-fill');
-    const label = wrap.querySelector('#ed-progress-label');
-    if (fill) fill.style.width = unlockedCount ? Math.round((checked / unlockedCount) * 100) + '%' : '0%';
-    if (label) label.textContent = checked + ' / ' + unlockedCount;
-    for (const p of PILLARS) {
-      const meta = wrap.querySelector(`[data-meta="${p.id}"]`);
-      if (meta) {
-        const qs = questionsByPillar(p.id);
-        const done = qs.filter((q) => record.questions[q.id]?.checked).length;
-        meta.textContent = `${done} / ${qs.length} answered`;
-      }
-    }
-    const sc = await scoreForRecord(record);
-    const scoreEl = wrap.querySelector('#ed-score');
-    if (scoreEl) scoreEl.textContent = sc.score.toLocaleString();
-  }
-  let _autoFetchTried = !!record.weather;
-  async function maybeAutoFetchWeather() {
-    if (_autoFetchTried || record.weather) return;
-    _autoFetchTried = true;
-    try {
-      const loc = await getSetting('location');
-      if (!loc || loc.lat == null) return;
-      const w = await fetchWeather(loc.lat, loc.lon, record.date);
-      record.weather = w;
-      onChange(record);
-      const card = wrap.querySelector('#ed-weather-card');
-      if (card && card._rerender) card._rerender();
-    } catch (e) {
-      // Silent — user can hit Refresh manually.
-    }
-  }
-
   async function renderPointsBadge(row, qid) {
     const badge = row.querySelector(`.q-points-badge[data-points="${qid}"]`);
     if (!badge) return;
     const qr = record.questions[qid];
-    if (qr && qr.checked) {
+    const v = qr ? (qr.value != null ? qr.value : (qr.checked ? 100 : 0)) : 0;
+    if (v > 0) {
       const pts = await pointsForCheck(record, qid);
       badge.textContent = '+' + pts.toLocaleString();
       badge.style.display = '';
@@ -290,19 +256,19 @@ async function renderDayEditor(record, opts = {}) {
     for (const q of QUESTIONS) {
       const row = wrap.querySelector(`.q[data-qid="${q.id}"]`);
       if (!row) continue;
-      const streak = c2[q.id] || 0;
+      const avg = Math.round(c2[q.id] || 0);
       const badge = row.querySelector('.q-streak');
       if (badge) {
-        badge.textContent = `${streak} / 7 last 7 days`;
+        badge.textContent = `Avg ${avg} / 100 last 7 days`;
         badge.classList.remove('low', 'mid', 'high');
-        badge.classList.add(streak >= 5 ? 'high' : streak >= 3 ? 'mid' : 'low');
+        badge.classList.add(avg >= 50 ? 'high' : avg >= 30 ? 'mid' : 'low');
       }
-      const cb = row.querySelector('.q-check');
+      const slider = row.querySelector('.q-slider');
       const wasUnlocked = !row.classList.contains('locked');
       const nowUnlocked = u2.has(q.id);
       if (wasUnlocked !== nowUnlocked) {
         row.classList.toggle('locked', !nowUnlocked);
-        if (cb) cb.disabled = !nowUnlocked;
+        if (slider) slider.disabled = !nowUnlocked;
         const lockSpan = row.querySelector('.q-lock');
         if (nowUnlocked && lockSpan) lockSpan.remove();
         if (!nowUnlocked && !lockSpan) {
@@ -312,6 +278,70 @@ async function renderDayEditor(record, opts = {}) {
       }
     }
   }
+
+  async function updateProgress() {
+    let answered = 0;
+    for (const q of QUESTIONS) {
+      const qr = record.questions[q.id];
+      const v = qr ? (qr.value != null ? qr.value : (qr.checked ? 100 : 0)) : 0;
+      if (v > 0) answered++;
+    }
+    const fill = wrap.querySelector('#ed-progress-fill');
+    const label = wrap.querySelector('#ed-progress-label');
+    if (fill) fill.style.width = unlockedCount ? Math.round((answered / unlockedCount) * 100) + '%' : '0%';
+    if (label) label.textContent = answered + ' / ' + unlockedCount;
+    for (const p of PILLARS) {
+      const meta = wrap.querySelector(`[data-meta="${p.id}"]`);
+      if (meta) {
+        const qs = questionsByPillar(p.id);
+        let done = 0;
+        for (const q of qs) {
+          const qr = record.questions[q.id];
+          const v = qr ? (qr.value != null ? qr.value : (qr.checked ? 100 : 0)) : 0;
+          if (v > 0) done++;
+        }
+        meta.textContent = `${done} / ${qs.length} answered`;
+      }
+    }
+    const sc = await scoreForRecord(record);
+    const scoreEl = wrap.querySelector('#ed-score');
+    if (scoreEl) scoreEl.textContent = sc.score.toLocaleString();
+  }
+
+  // Live "next −1 in" countdown ticker
+  function startTicker() {
+    if (scoreTickTimer) clearInterval(scoreTickTimer);
+    const dropEvery = secondsUntilNextPointDrop();
+    let secs = dropEvery;
+    const tickEl = wrap.querySelector('#ed-tick-val');
+    function fmt(s) {
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return m > 0 ? `${m}m ${String(r).padStart(2, '0')}s` : `${r}s`;
+    }
+    if (tickEl) tickEl.textContent = fmt(secs);
+    scoreTickTimer = setInterval(async () => {
+      secs--;
+      if (secs <= 0) {
+        secs = dropEvery;
+        await updateProgress();
+        for (const q of QUESTIONS) {
+          const row = wrap.querySelector(`.q[data-qid="${q.id}"]`);
+          if (row) await renderPointsBadge(row, q.id);
+        }
+      }
+      if (tickEl) tickEl.textContent = fmt(secs);
+    }, 1000);
+  }
+  startTicker();
+  // Stop ticker if element removed
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(wrap)) {
+      clearInterval(scoreTickTimer);
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 
   updateProgress();
   wrap.addEventListener('record-saved', () => { renderLastEdited(); updateProgress(); });
@@ -336,6 +366,7 @@ async function renderTodayView(container) {
     const yest = await getYesterdayRecord();
     if (yest && yest.sliders) {
       record.sliders = { ...yest.sliders };
+      delete record.sliders.oura;
     }
     try {
       const loc = await getSetting('location');

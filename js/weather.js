@@ -64,6 +64,14 @@ async function fetchWeather(lat, lon, dateISO) {
   throw lastErr || new Error('Weather fetch failed');
 }
 
+async function fetchWeatherForDate(lat, lon, dateISO) {
+  try {
+    return await fetchWeather(lat, lon, dateISO);
+  } catch (_) {
+    return null;
+  }
+}
+
 async function getOrFetchWeatherForToday(record) {
   if (record.weather && record.weather.fetchedAt) return record.weather;
   const loc = await getSetting('location');

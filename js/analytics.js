@@ -1,5 +1,5 @@
 let _corrState = { x: [], y: [], search: '', lag: 0 };
-let _charts = { trend: null, pillar: null, scatter: null };
+let _charts = { score: null, trend: null, pillar: null, scatter: null };
 
 async function renderAnalyticsView(container) {
   container.innerHTML = '';
@@ -15,8 +15,16 @@ async function renderAnalyticsView(container) {
 
   const all = await getAllDays();
 
-  // A: Score trend
-  const trendCard = card('Score Trends — Last 30 Days');
+  // Top: Daily Score history
+  const scoreCard = card('Daily Score — Last 30 Days');
+  const scoreCanvas = document.createElement('div');
+  scoreCanvas.className = 'chart-wrap';
+  scoreCanvas.innerHTML = '<canvas id="ch-score"></canvas>';
+  scoreCard.appendChild(scoreCanvas);
+  container.appendChild(scoreCard);
+
+  // A: Slider trend
+  const trendCard = card('Slider Trends — Last 30 Days');
   const trendCanvas = document.createElement('div');
   trendCanvas.className = 'chart-wrap';
   trendCanvas.innerHTML = '<canvas id="ch-trend"></canvas>';
@@ -42,10 +50,46 @@ async function renderAnalyticsView(container) {
   renderWeatherInfluence(wxCard, all);
 
   // Defer chart drawing until DOM attached
-  setTimeout(() => {
+  setTimeout(async () => {
+    await drawDailyScoreChart(all);
     drawScoreTrend(all);
     drawPillarTrend(all);
   }, 0);
+}
+
+async function drawDailyScoreChart(all) {
+  const ctx = document.getElementById('ch-score');
+  if (!ctx) return;
+  if (_charts.score) _charts.score.destroy();
+  const days = lastN(all, 30);
+  const labels = days.map((d) => d.date.slice(5));
+  const data = [];
+  for (const d of days) {
+    if (d.record) {
+      const s = await scoreForRecord(d.record);
+      data.push(s.score);
+    } else data.push(0);
+  }
+  _charts.score = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Daily Score',
+        data,
+        borderColor: '#c9a84c',
+        backgroundColor: 'rgba(201,168,76,0.18)',
+        tension: 0.3,
+        fill: true,
+        pointRadius: 3,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } },
+    },
+  });
 }
 
 function card(title) {

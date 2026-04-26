@@ -6,13 +6,15 @@ function buildVariableCatalog() {
     vars.push({ id: 'slider:' + s.id, name: s.label, group: 'Sliders',
       get: (r) => r.sliders ? r.sliders[s.id] : null });
   }
-  // Daily score (raw points)
+  // Daily score (raw points, 100 × value-fraction per habit)
   vars.push({ id: 'score:daily', name: 'Daily Score (points)', group: 'Score',
     get: (r) => {
       let total = 0;
       for (const q of QUESTIONS) {
         const qr = r.questions?.[q.id];
-        if (qr?.checked) total += 100; // simplified; real scoring uses settings async
+        if (!qr) continue;
+        const v = qr.value != null ? qr.value : (qr.checked ? 100 : 0);
+        total += v;
       }
       return total;
     } });
@@ -23,13 +25,17 @@ function buildVariableCatalog() {
     vars.push({ id: 'pct:' + p.id, name: p.name + ' Completion %', group: 'Completion',
       get: (r) => pillarCompletion(r, p.id) });
   }
-  // Questions
+  // Questions (use slider value 0-100; fall back to checked era)
   for (const q of QUESTIONS) {
     vars.push({
       id: 'q:' + q.id,
-      name: q.id.toUpperCase() + ': ' + q.text,
+      name: '#' + (q.displayNum || '?') + ': ' + q.text,
       group: 'Questions',
-      get: (r) => (r.questions && r.questions[q.id] && r.questions[q.id].checked) ? 100 : 0,
+      get: (r) => {
+        const qr = r.questions && r.questions[q.id];
+        if (!qr) return 0;
+        return qr.value != null ? qr.value : (qr.checked ? 100 : 0);
+      },
     });
   }
   // Weather

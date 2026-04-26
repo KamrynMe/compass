@@ -1,31 +1,20 @@
 let _calState = { year: null, month: null };
 
-// Returns a CSS background color for a given completion %.
-// 0 → muted brown; 50 → orange-yellow; 100 → green.
-function calCellColor(pct) {
-  if (pct <= 0) return '#f0e8de';
-  // Three-stop gradient interpolation.
-  const stops = [
-    { p: 0,   r: 154, g: 110, b: 70 },   // brown
-    { p: 50,  r: 232, g: 178, b: 80 },   // orange-yellow
-    { p: 100, r: 90,  g: 168, b: 110 },  // green
-  ];
-  let lo = stops[0], hi = stops[stops.length - 1];
-  for (let i = 0; i < stops.length - 1; i++) {
-    if (pct >= stops[i].p && pct <= stops[i + 1].p) {
-      lo = stops[i]; hi = stops[i + 1]; break;
-    }
-  }
-  const t = (pct - lo.p) / Math.max(1, (hi.p - lo.p));
-  const r = Math.round(lo.r + (hi.r - lo.r) * t);
-  const g = Math.round(lo.g + (hi.g - lo.g) * t);
-  const b = Math.round(lo.b + (hi.b - lo.b) * t);
-  // Soften with white blend so the day number stays readable.
-  const blend = 0.55;
-  const wr = Math.round(r * blend + 255 * (1 - blend));
-  const wg = Math.round(g * blend + 255 * (1 - blend));
-  const wb = Math.round(b * blend + 255 * (1 - blend));
-  return `rgb(${wr},${wg},${wb})`;
+function lerpHex(a, b, t) {
+  const ah = parseInt(a.slice(1), 16), bh = parseInt(b.slice(1), 16);
+  const ar = (ah >> 16) & 0xff, ag = (ah >> 8) & 0xff, ab = ah & 0xff;
+  const br = (bh >> 16) & 0xff, bg = (bh >> 8) & 0xff, bb = bh & 0xff;
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const c = Math.round(ab + (bb - ab) * t);
+  return '#' + ((r << 16) | (g << 8) | c).toString(16).padStart(6, '0');
+}
+function colorForPct(pct) {
+  // brown → orange → yellow → green
+  if (pct <= 0) return '#a89070';
+  if (pct < 33) return lerpHex('#a89070', '#d68030', pct / 33);
+  if (pct < 66) return lerpHex('#d68030', '#e8c040', (pct - 33) / 33);
+  return lerpHex('#e8c040', '#4a9a6a', (pct - 66) / 34);
 }
 
 async function renderCalendarView(container) {
@@ -86,7 +75,6 @@ async function renderCalendarView(container) {
 
   const firstDow = new Date(_calState.year, _calState.month, 1).getDay();
   const lastDay = new Date(_calState.year, _calState.month + 1, 0).getDate();
-
   const startISO = `${_calState.year}-${String(_calState.month + 1).padStart(2, '0')}-01`;
   const endISO = `${_calState.year}-${String(_calState.month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   const records = await getDaysInRange(startISO, endISO);
@@ -105,10 +93,16 @@ async function renderCalendarView(container) {
     const cell = document.createElement('div');
     cell.className = 'cal-day';
     if (dateISO === today) cell.classList.add('today');
+
     const pct = rec ? overallCompletion(rec) : 0;
-    cell.style.background = calCellColor(pct);
-    if (rec && isLateEdit(rec)) cell.classList.add('late');
-    cell.innerHTML = `<div class="cal-num">${day}</div><div class="cal-pct">${rec ? pct + '%' : ''}</div>`;
+    const bg = rec ? colorForPct(pct) : 'transparent';
+    cell.style.background = bg;
+    if (pct >= 50) cell.style.color = 'white';
+
+    // Blue outline if last edit was within 48h after the day's end (i.e. NOT a late edit)
+    if (rec && rec.lastEditedAt && !isLateEdit(rec)) cell.classList.add('timely');
+
+    cell.innerHTML = `<div>${day}</div>`;
     cell.addEventListener('click', () => openDayModal(dateISO));
     grid.appendChild(cell);
   }
@@ -117,12 +111,16 @@ async function renderCalendarView(container) {
   const legend = document.createElement('div');
   legend.className = 'muted';
   legend.style.marginTop = '12px';
-  legend.style.fontSize = '13px';
+  legend.style.fontSize = '12px';
   legend.style.textAlign = 'center';
   legend.innerHTML = `
-    <span class="cal-legend-bar"></span>
-    <div style="margin-top:4px;">Brown 0% &nbsp;→&nbsp; Yellow 50% &nbsp;→&nbsp; Green 100%</div>
-    <div style="margin-top:6px;">Red dashed outline = last edited &gt; 48 hrs after the day ended.</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">
+      <span style="background:#a89070;display:inline-block;width:14px;height:14px;border-radius:3px;"></span> 0%
+      <span style="background:#d68030;display:inline-block;width:14px;height:14px;border-radius:3px;"></span> 33%
+      <span style="background:#e8c040;display:inline-block;width:14px;height:14px;border-radius:3px;"></span> 66%
+      <span style="background:#4a9a6a;display:inline-block;width:14px;height:14px;border-radius:3px;"></span> 100%
+    </div>
+    <div style="margin-top:6px;">Blue outline: edited on time (within 48h of day's end).</div>
   `;
   container.appendChild(legend);
 }

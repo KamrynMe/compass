@@ -70,6 +70,11 @@ const ORIGINAL_QUESTIONS = [
 // Live, mutable list. Starts as a copy of ORIGINAL_QUESTIONS; rebuilt with customs at boot.
 const QUESTIONS = ORIGINAL_QUESTIONS.map((q) => ({ ...q, original: true }));
 
+function displayNumberFor(qid) {
+  const q = QUESTIONS.find((x) => x.id === qid);
+  return q?.displayNum || '?';
+}
+
 async function loadCustomGoals() {
   return (await getSetting('customGoals')) || [];
 }
@@ -96,7 +101,10 @@ function rebuildQuestionsFrom(customs) {
   }
   for (const c of remaining) list.push({ ...c, custom: true });
   QUESTIONS.length = 0;
-  for (const q of list) QUESTIONS.push(q);
+  for (let i = 0; i < list.length; i++) {
+    list[i].displayNum = i + 1;
+    QUESTIONS.push(list[i]);
+  }
 }
 
 async function initQuestions() {
@@ -146,31 +154,35 @@ function questionsByPillar(pillarId) {
 }
 
 const SLIDERS = [
-  { id: 'oura',          label: 'Oura Sleep Score', cls: 'oura' },
-  { id: 'circumstances', label: 'Circumstances',    cls: 'circumstances' },
-  { id: 'mood',          label: 'Mood',             cls: 'mood' },
-  { id: 'productivity',  label: 'Productivity',     cls: 'productivity' },
+  { id: 'circumstances', label: 'Circumstances', cls: 'circumstances' },
+  { id: 'mood',          label: 'Mood',          cls: 'mood' },
+  { id: 'productivity',  label: 'Productivity',  cls: 'productivity' },
 ];
 
 // --- Habit unlock chain ---
 // A habit is unlocked when its predecessor in QUESTIONS order has been checked
 // at least 5 times in the previous 7 days (not counting today). The first habit
 // is always unlocked.
-// Returns { qid: count_in_last_7_days_INCLUDING dateISO }
+// Returns { qid: avg_value_in_last_7_days_INCLUDING_dateISO } where value is 0..100
 async function recentCheckCounts(dateISO) {
   const endDate = new Date(dateISO + 'T00:00:00');
   const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - 6); // 7 days inclusive of dateISO
+  startDate.setDate(startDate.getDate() - 6);
   const startISO = startDate.toISOString().slice(0, 10);
   const recent = await getDaysInRange(startISO, dateISO);
-  const counts = {};
-  for (const q of QUESTIONS) counts[q.id] = 0;
+  const sums = {};
+  for (const q of QUESTIONS) sums[q.id] = 0;
   for (const r of recent) {
     for (const q of QUESTIONS) {
-      if (r.questions?.[q.id]?.checked) counts[q.id]++;
+      const qr = r.questions?.[q.id];
+      if (!qr) continue;
+      const v = qr.value != null ? qr.value : (qr.checked ? 100 : 0);
+      sums[q.id] += v;
     }
   }
-  return counts;
+  const out = {};
+  for (const q of QUESTIONS) out[q.id] = sums[q.id] / 7;
+  return out;
 }
 
 async function computeUnlockedSet(dateISO, counts) {
@@ -180,19 +192,18 @@ async function computeUnlockedSet(dateISO, counts) {
   for (const q of QUESTIONS) {
     if (q.pillar === 'prerequisite') unlocked.add(q.id);
   }
-  // Stack chain across non-prerequisite goals in QUESTIONS order.
-  // First non-prereq is unlocked iff at least one prereq has 5/7. If no prereqs
-  // exist, it unlocks unconditionally.
+  // Chain: a non-prereq habit unlocks when its predecessor's 7-day average ≥ 50.
+  // First non-prereq unlocks iff some prereq's avg ≥ 50 (or no prereqs exist).
   let prevSatisfied = true;
   const prereqs = QUESTIONS.filter((q) => q.pillar === 'prerequisite');
   if (prereqs.length) {
-    prevSatisfied = prereqs.some((q) => (c[q.id] || 0) >= 5);
+    prevSatisfied = prereqs.some((q) => (c[q.id] || 0) >= 50);
   }
   for (const q of QUESTIONS) {
     if (q.pillar === 'prerequisite') continue;
     if (prevSatisfied) {
       unlocked.add(q.id);
-      prevSatisfied = (c[q.id] || 0) >= 5;
+      prevSatisfied = (c[q.id] || 0) >= 50;
     } else {
       break;
     }
@@ -221,29 +232,58 @@ function scoreMultiplierFor(checkTime, wakeStr, winddownStr, dateISO) {
   return 1 + 4 * frac;
 }
 
-// Points earned by a single check given its checkedAt timestamp.
-async function pointsForCheck(record, qid) {
-  const qr = record?.questions?.[qid];
-  if (!qr || !qr.checked || !qr.checkedAt) return 0;
-  const wake = (await getSetting('wakeTime')) || '05:00';
-  const wind = (await getSetting('winddownTime')) || '19:00';
-  return Math.round(100 * scoreMultiplierFor(qr.checkedAt, wake, wind, record.date));
+// Wind-down is locked at wake + 14h.
+function winddownFromWake(wakeStr) {
+  const [h, m] = (wakeStr || '05:00').split(':').map(Number);
+  let nh = h + 14;
+  if (nh >= 24) nh -= 24;
+  return String(nh).padStart(2, '0') + ':' + String(m).padStart(2, '0');
 }
 
-// Score for one record. Each checked habit contributes 100 * multiplier.
+async function getWakeWind() {
+  const wake = (await getSetting('wakeTime')) || '05:00';
+  return { wake, wind: winddownFromWake(wake) };
+}
+
+function valueOf(qr) {
+  if (!qr) return 0;
+  if (qr.value != null) return qr.value;
+  return qr.checked ? 100 : 0;
+}
+
+// Points earned by a single habit slider value, scaled by multiplier.
+async function pointsForCheck(record, qid) {
+  const qr = record?.questions?.[qid];
+  if (!qr) return 0;
+  const v = valueOf(qr);
+  if (v <= 0) return 0;
+  const { wake, wind } = await getWakeWind();
+  const t = qr.firstSetAt || qr.checkedAt || qr.lastChangedAt || record.lastEditedAt;
+  return Math.round(v * scoreMultiplierFor(t, wake, wind, record.date));
+}
+
+// Total daily score = Σ value × multiplier per habit. Possible = N habits × 500.
 async function scoreForRecord(record) {
   if (!record) return { score: 0, possible: 0, checks: 0 };
-  const wake = (await getSetting('wakeTime')) || '05:00';
-  const wind = (await getSetting('winddownTime')) || '19:00';
+  const { wake, wind } = await getWakeWind();
   let total = 0;
   let checks = 0;
   for (const q of QUESTIONS) {
     const qr = record.questions?.[q.id];
-    if (qr && qr.checked) {
-      const mult = scoreMultiplierFor(qr.checkedAt || record.lastEditedAt, wake, wind, record.date);
-      total += 100 * mult;
+    if (!qr) continue;
+    const v = valueOf(qr);
+    if (v > 0) {
+      const t = qr.firstSetAt || qr.checkedAt || qr.lastChangedAt || record.lastEditedAt;
+      total += v * scoreMultiplierFor(t, wake, wind, record.date);
       checks++;
     }
   }
   return { score: Math.round(total), possible: QUESTIONS.length * 500, checks };
+}
+
+// Seconds until the multiplier for a habit set NOW will tick down by enough to
+// shave 1 point off (at value 100). Used by the live "next change in" banner.
+function secondsUntilNextPointDrop() {
+  const total = 14 * 3600; // wake to wind = 14h
+  return Math.round(total / 400); // ≈ 126s ≈ 2m 6s
 }

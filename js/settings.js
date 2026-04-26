@@ -18,33 +18,36 @@ async function renderSettingsView(container) {
 
   const cardW = document.createElement('div');
   cardW.className = 'card';
+  const wDerived = winddownFromWake(wakeT);
   cardW.innerHTML = `
-    <h3>Wake & Wind-Down</h3>
-    <div class="setting-help">Used by the daily score: checks earlier in your waking window earn up to 5×.</div>
+    <h3>Wake Time</h3>
+    <div class="setting-help">Wind-down is automatic at wake + 14h. Score earns up to 5× early in the day.</div>
     <div class="setting-row">
       <div class="setting-label">Wake Time</div>
       <input class="input-text" type="time" step="300" id="wake-time" value="${wakeT}">
     </div>
     <div class="setting-row">
-      <div class="setting-label">Wind-Down Time</div>
-      <input class="input-text" type="time" step="300" id="wind-time" value="${windT}">
+      <div class="setting-label">Wind-Down (auto)</div>
+      <div id="wind-derived" class="muted" style="font-size:16px;font-weight:600;">${wDerived}</div>
     </div>
     <div class="row-buttons">
-      <button class="btn-secondary" id="wake-default">Defaults (5am / 7pm)</button>
+      <button class="btn-secondary" id="wake-default">Default (5:00 am)</button>
       <button class="btn-primary" id="wake-save">Save</button>
     </div>
   `;
   container.appendChild(cardW);
+  cardW.querySelector('#wake-time').addEventListener('input', (e) => {
+    cardW.querySelector('#wind-derived').textContent = winddownFromWake(e.target.value);
+  });
   cardW.querySelector('#wake-default').addEventListener('click', () => {
     cardW.querySelector('#wake-time').value = '05:00';
-    cardW.querySelector('#wind-time').value = '19:00';
+    cardW.querySelector('#wind-derived').textContent = winddownFromWake('05:00');
   });
   cardW.querySelector('#wake-save').addEventListener('click', async () => {
     const w = cardW.querySelector('#wake-time').value;
-    const d = cardW.querySelector('#wind-time').value;
     await setSetting('wakeTime', w);
-    await setSetting('winddownTime', d);
-    showToast('Times saved');
+    await setSetting('winddownTime', winddownFromWake(w));
+    showToast('Wake time saved');
   });
 
   const card1 = document.createElement('div');

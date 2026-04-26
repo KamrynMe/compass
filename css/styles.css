@@ -9,11 +9,12 @@
   --gold: #c9a84c;
   --gold-deep: #8a6820;
 
-  --s-color: #8a6820; --s-bg: #fdf6e8; --s-border: #c9a84c;
-  --h-color: #1b3a2a; --h-bg: #eef7f1; --h-border: #4a9a6a;
-  --st-color: #1b2e4a; --st-bg: #eef2f9; --st-border: #4a7ab0;
+  /* Spiritual = red, Health = blue, Strategy = gold, Enjoyment = green, Financial = purple */
+  --s-color: #4a1b1b; --s-bg: #fdf0f0; --s-border: #c05050;
+  --h-color: #1b2e4a; --h-bg: #eef2f9; --h-border: #4a7ab0;
+  --st-color: #8a6820; --st-bg: #fdf6e8; --st-border: #c9a84c;
   --f-color: #2e1b4a; --f-bg: #f4eef9; --f-border: #8a5ab0;
-  --e-color: #4a1b1b; --e-bg: #fdf0f0; --e-border: #c05050;
+  --e-color: #1b3a2a; --e-bg: #eef7f1; --e-border: #4a9a6a;
 
   --slider-oura: #4a7ab0;
   --slider-circ: #c9a84c;
@@ -720,6 +721,105 @@ button { cursor: pointer; touch-action: manipulation; }
   100% { background: transparent; }
 }
 .q.row-flash { animation: row-flash-kf 0.7s ease-out; }
+
+/* Score-change countdown row */
+.score-tick-row {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: var(--bg2);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--ink2);
+  text-align: center;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Habit slider rows (replaces checkboxes) */
+.q-slider-row {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 10px;
+}
+.q-slider {
+  flex: 1; height: 28px;
+  -webkit-appearance: none; appearance: none;
+  background: transparent;
+  --c: var(--gold);
+}
+.q-slider::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 3px; background: var(--bg2);
+}
+.q-slider::-moz-range-track {
+  height: 6px; border-radius: 3px; background: var(--bg2);
+}
+.q-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--c); margin-top: -10px;
+  border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.q-slider::-moz-range-thumb {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--c);
+  border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.q-slider:disabled { opacity: 0.4; cursor: not-allowed; }
+.q-val {
+  min-width: 36px; text-align: right;
+  font-size: 16px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.pillar.prerequisite .q-slider { --c: var(--gold-deep); }
+.pillar.spiritual    .q-slider { --c: var(--s-border); }
+.pillar.health       .q-slider { --c: var(--h-border); }
+.pillar.strategy     .q-slider { --c: var(--st-border); }
+.pillar.financial    .q-slider { --c: var(--f-border); }
+.pillar.enjoyment    .q-slider { --c: var(--e-border); }
+
+/* Display number on each habit */
+.q-num {
+  display: inline-block;
+  margin-right: 4px;
+  font-weight: 700;
+  color: var(--ink3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Persistent points badge on each row */
+.q-points-badge {
+  display: inline-block;
+  background: #1b6b3a;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px rgba(27,107,58,0.25);
+}
+.q-meta-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap;
+  margin-top: 8px;
+}
+.q-meta-row .q-streak { margin-top: 0; }
+
+/* Weather: keep all 4 cells in one row */
+.weather-grid-row { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.weather-grid-row .v { font-size: 18px; }
+.weather-grid-row .l { font-size: 11px; }
+
+/* Calendar: full-cell color + blue timely-edit outline */
+.cal-day { font-weight: 600; color: var(--ink); }
+.cal-day.timely { box-shadow: inset 0 0 0 2px #4a7ab0; }
+.cal-day.today  { outline: 2px solid var(--gold); outline-offset: -2px; }
+
+/* Beats note line */
+.beat-note {
+  font-size: 11px; color: var(--ink3);
+  margin-top: 4px; line-height: 1.35; font-style: normal;
+}
 
 /* Persistent points badge */
 .q { position: relative; }
