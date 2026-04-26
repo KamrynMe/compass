@@ -848,52 +848,52 @@ input[type="time"].input-text { font-family: inherit; }
 }
 .compress-dots .dot.active { background: var(--gold); }
 
-/* Momentum: blends with page background, no box outline. */
+/* Momentum: blends with page background, no box outline; glow extends freely. */
 .momentum-card {
   text-align: center;
-  padding: 8px 8px 14px;
+  padding: 28px 8px;
   margin-bottom: 14px;
   background: transparent;
   border: none;
   position: relative;
+  overflow: visible;
 }
 .momentum-card .mom-value-wrap,
 .momentum-card .mom-label-wrap {
   display: flex; align-items: center; justify-content: center;
-  width: 100%; overflow: hidden;
+  width: 100%;
+  overflow: visible;
 }
+.momentum-card .mom-value-wrap { padding: 18px 0; }
 .momentum-card .mom-value {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   white-space: nowrap;
   display: inline-block;
-  -webkit-text-stroke: 1px var(--ink);
-  text-stroke: 1px var(--ink);
-  paint-order: stroke fill;
   transition: text-shadow 0.4s;
 }
 .momentum-card .mom-label {
-  font-weight: 900;
-  letter-spacing: 0.5px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: var(--ink);
+  color: var(--ink3);
   display: inline-block;
   white-space: nowrap;
   margin-top: 4px;
 }
-:root[data-theme="dark"] .momentum-card .mom-label { color: var(--ink); }
 
 .momentum-card.glow .mom-value {
   text-shadow:
-    0 0 6px rgba(74,154,106,0.85),
-    0 0 18px rgba(74,154,106,0.7),
-    0 0 36px rgba(74,154,106,0.45);
+    0 0 8px rgba(30,180,80,0.95),
+    0 0 22px rgba(30,180,80,0.75),
+    0 0 44px rgba(30,180,80,0.5);
   animation: mom-glow 2.2s ease-in-out infinite;
 }
 @keyframes mom-glow {
-  0%, 100% { text-shadow: 0 0 6px rgba(74,154,106,0.85), 0 0 18px rgba(74,154,106,0.6), 0 0 32px rgba(74,154,106,0.4); }
-  50%      { text-shadow: 0 0 8px rgba(74,154,106,1.0),  0 0 28px rgba(74,154,106,0.85), 0 0 50px rgba(74,154,106,0.65); }
+  0%, 100% { text-shadow: 0 0 8px rgba(30,180,80,0.95),  0 0 22px rgba(30,180,80,0.65), 0 0 38px rgba(30,180,80,0.4); }
+  50%      { text-shadow: 0 0 12px rgba(30,180,80,1.0),  0 0 32px rgba(30,180,80,0.9),  0 0 60px rgba(30,180,80,0.7); }
 }
 .mom-debug {
   margin-top: 10px;

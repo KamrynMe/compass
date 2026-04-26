@@ -549,8 +549,8 @@ function momentumColor(pct) {
   if (pct <= 0) return '#a89070';
   if (pct < 30) return _lerpHex('#a89070', '#d68030', pct / 30);
   if (pct < 60) return _lerpHex('#d68030', '#e8c040', (pct - 30) / 30);
-  if (pct < 90) return _lerpHex('#e8c040', '#4a9a6a', (pct - 60) / 30);
-  return '#4a9a6a';
+  if (pct < 90) return _lerpHex('#e8c040', '#1ec45a', (pct - 60) / 30);
+  return '#1ec45a';
 }
 function _lerpHex(a, b, t) {
   const ah = parseInt(a.slice(1), 16), bh = parseInt(b.slice(1), 16);
@@ -644,21 +644,12 @@ async function isAwakeNow() {
 function fitMomentumText(card) {
   requestAnimationFrame(() => {
     const valEl = card.querySelector('.mom-value');
-    const labelEl = card.querySelector('.mom-label');
     const valWrap = card.querySelector('.mom-value-wrap');
-    const labelWrap = card.querySelector('.mom-label-wrap');
-    if (valEl && valWrap) {
-      const targetW = (valWrap.clientWidth || 1) * 0.75;
-      valEl.style.fontSize = '180px';
-      const ratio = targetW / Math.max(1, valEl.scrollWidth);
-      valEl.style.fontSize = (180 * ratio).toFixed(1) + 'px';
-    }
-    if (labelEl && labelWrap) {
-      const targetW = (labelWrap.clientWidth || 1) * 0.6;
-      labelEl.style.fontSize = '60px';
-      const ratio = targetW / Math.max(1, labelEl.scrollWidth);
-      labelEl.style.fontSize = (60 * ratio).toFixed(1) + 'px';
-    }
+    if (!valEl || !valWrap) return;
+    const targetW = (valWrap.clientWidth || 1) * 0.75;
+    valEl.style.fontSize = '180px';
+    const ratio = targetW / Math.max(1, valEl.scrollWidth);
+    valEl.style.fontSize = (180 * ratio).toFixed(1) + 'px';
   });
 }
 
