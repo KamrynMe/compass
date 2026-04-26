@@ -139,6 +139,73 @@ async function renderCalendarView(container) {
     <div style="margin-top:6px;">Blue outline: edited on time (within 48h of day's end).</div>
   `;
   container.appendChild(legend);
+
+  await renderCalendarCorrelations(container);
+}
+
+async function renderCalendarCorrelations(container) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <h3>Top Correlations — Last 30 Days</h3>
+    <div id="cal-corr-body" class="muted" style="font-size:14px;">Computing…</div>
+  `;
+  container.appendChild(card);
+  const body = card.querySelector('#cal-corr-body');
+  try {
+    const all = await getAllDays();
+    const today30 = new Date();
+    today30.setDate(today30.getDate() - 30);
+    const cutoffISO = today30.toISOString().slice(0, 10);
+    const recent = all.filter((r) => r.date >= cutoffISO);
+    if (recent.length < 5) {
+      body.innerHTML = '<div class="empty-state">Need at least 5 days of recent data.</div>';
+      return;
+    }
+    const catalog = buildVariableCatalog();
+    function topN(lag, n) {
+      const out = [];
+      for (let i = 0; i < catalog.length; i++) {
+        for (let j = i + 1; j < catalog.length; j++) {
+          const a = catalog[i], b = catalog[j];
+          if (a.id === b.id) continue;
+          const pairs = buildPairs(recent, [a], [b], lag);
+          if (pairs.length < 5) continue;
+          const r = pearson(pairs.map((p) => p.x), pairs.map((p) => p.y));
+          if (r == null) continue;
+          out.push({ a: a.name, b: b.name, r, n: pairs.length });
+        }
+      }
+      out.sort((x, y) => Math.abs(y.r) - Math.abs(x.r));
+      return out.slice(0, n);
+    }
+    const sameDay = topN(0, 3);
+    const lag2 = topN(2, 1);
+    const lag7 = topN(7, 1);
+    function fmt(rows, label) {
+      if (!rows.length) return `<div class="muted" style="font-size:12px;">${label}: not enough data.</div>`;
+      return `
+        <div class="section-title" style="margin:8px 0 4px;">${label}</div>
+        ${rows.map((r) => {
+          const pct = Math.round(r.r * 100);
+          const cls = Math.abs(r.r) >= 0.6 ? 'high' : Math.abs(r.r) >= 0.3 ? 'mid' : 'low';
+          return `
+            <div class="var-item" style="border-bottom:1px solid #f0ece4;">
+              <div style="flex:1;min-width:0;font-size:13px;">${escapeHtml(r.a)} ↔ ${escapeHtml(r.b)}</div>
+              <div class="q-streak ${cls}" style="font-variant-numeric:tabular-nums;">${pct >= 0 ? '+' : ''}${pct}%</div>
+            </div>
+          `;
+        }).join('')}
+      `;
+    }
+    body.innerHTML = `
+      ${fmt(sameDay, 'Same-day · top 3')}
+      ${fmt(lag2, '2-day lag · top 1')}
+      ${fmt(lag7, '7-day lag · top 1')}
+    `;
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">Could not compute.</div>';
+  }
 }
 
 async function openDayModal(dateISO) {

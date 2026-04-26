@@ -111,6 +111,10 @@ button { cursor: pointer; touch-action: manipulation; }
   border-top: 1px solid var(--rule);
   display: flex;
   z-index: 99;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: transform;
+  contain: layout paint;
 }
 .tab {
   flex: 1;
@@ -799,6 +803,84 @@ input[type="time"].input-text { font-family: inherit; }
 }
 .q.row-flash { animation: row-flash-kf 0.7s ease-out; }
 
+/* Full-screen compress comparison */
+.compress-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: #0a0805; color: #f0e8d5;
+  display: flex; flex-direction: column;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+}
+.compress-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  gap: 10px;
+  background: #14110b;
+  border-bottom: 1px solid #2a2418;
+}
+.compress-head .modal-back { background: #2a2418; color: #f0e8d5; border-color: #3a3024; }
+.compress-title { font-size: 14px; font-weight: 700; flex: 1; text-align: center; }
+.compress-strip {
+  flex: 1; display: flex; overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+}
+.compress-pane {
+  flex: 0 0 100%; height: 100%;
+  scroll-snap-align: start;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: #000;
+}
+.compress-pane img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.compress-tag {
+  position: absolute; top: 12px; left: 12px;
+  background: rgba(0,0,0,0.75); color: #fff;
+  padding: 6px 10px; border-radius: 6px;
+  font-size: 13px; font-weight: 600;
+}
+.compress-dots {
+  display: flex; gap: 8px; justify-content: center;
+  padding: 12px;
+}
+.compress-dots .dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #4a4030; cursor: pointer;
+}
+.compress-dots .dot.active { background: var(--gold); }
+
+/* Big Momentum tile */
+.momentum-card {
+  text-align: center;
+  padding: 22px 16px;
+  border: none;
+  color: white;
+  position: relative;
+  transition: box-shadow 0.4s;
+}
+.momentum-card .mom-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.momentum-card .mom-value {
+  font-size: 64px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  margin-top: 4px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.18);
+}
+.momentum-card.glow {
+  box-shadow: 0 0 0 3px #4a9a6a, 0 0 28px 6px rgba(74,154,106,0.55);
+  animation: mom-pulse 2.2s ease-in-out infinite;
+}
+@keyframes mom-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px #4a9a6a, 0 0 24px 4px rgba(74,154,106,0.45); }
+  50%      { box-shadow: 0 0 0 3px #4a9a6a, 0 0 36px 10px rgba(74,154,106,0.7); }
+}
+
 /* Score-change countdown row */
 .score-tick-row {
   margin-top: 12px;
@@ -952,12 +1034,14 @@ input[type="time"].input-text { font-family: inherit; }
 .img-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
 .img-del {
   position: absolute; top: 2px; right: 2px;
-  width: 20px; height: 20px; border-radius: 50%;
-  background: rgba(0,0,0,0.6); color: white;
-  border: none; font-size: 14px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(220,40,40,0.92); color: white;
+  border: 1.5px solid white; font-size: 14px; font-weight: 700;
+  display: none; align-items: center; justify-content: center;
   line-height: 1; padding: 0;
 }
+.img-strip.editing .img-del { display: flex; }
+.img-strip.editing .img-thumb { box-shadow: 0 0 0 2px var(--gold); }
 .img-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.92);

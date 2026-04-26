@@ -187,6 +187,49 @@ function stopCircadian() {
   _beats.circadian = false;
 }
 
+// --- Custom songs (sequence of segments) ---
+let _songTimer = null;
+let _songIndex = 0;
+let _songActive = null; // song id when playing
+
+async function loadSongs() {
+  return (await getSetting('beatSongs')) || [];
+}
+async function saveSongs(list) { await setSetting('beatSongs', list); }
+
+function stopSong() {
+  if (_songTimer) { clearTimeout(_songTimer); _songTimer = null; }
+  _songActive = null;
+  _songIndex = 0;
+}
+
+function playSong(song) {
+  stopCircadian();
+  stopSong();
+  if (!song?.segments?.length) return;
+  _songActive = song.id;
+  _songIndex = 0;
+  const playSegment = () => {
+    if (_songActive !== song.id) return;
+    if (_songIndex >= song.segments.length) {
+      stopBeats(true);
+      stopSong();
+      return;
+    }
+    const seg = song.segments[_songIndex];
+    const prevVol = _beats.volume;
+    _beats.volume = Math.max(0.01, Math.min(1.0, (seg.vol || 20) / 100));
+    if (_beats.active) transitionToWave(seg.wave);
+    else startBeats(seg.wave);
+    _beats.volume = prevVol;
+    _songTimer = setTimeout(() => {
+      _songIndex++;
+      playSegment();
+    }, Math.max(1000, (seg.durationSec || 60) * 1000));
+  };
+  playSegment();
+}
+
 async function applyCircadianVolume() {
   if (!_beats.circadian || !_beats.gain || !_beats.ctx) return;
   const wakeStr = (await getSetting('wakeTime')) || '05:00';
@@ -451,7 +494,167 @@ async function renderBeatsView(container) {
   });
   ctrlCard.querySelector('#beat-stop').addEventListener('click', () => {
     stopCircadian();
+    stopSong();
     stopBeats(true);
     refreshActive();
   });
+
+  await renderSongsCard(container);
+}
+
+async function renderSongsCard(container) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  container.appendChild(card);
+  let editingId = null;
+
+  async function draw() {
+    const songs = await loadSongs();
+    const editing = editingId ? songs.find((s) => s.id === editingId) : null;
+    const listHtml = songs.length === 0
+      ? '<div class="muted" style="font-size:14px;padding:8px 0;">No custom songs yet.</div>'
+      : songs.map((s) => {
+        const isPlaying = _songActive === s.id;
+        const totalSec = (s.segments || []).reduce((t, seg) => t + (seg.durationSec || 0), 0);
+        return `
+          <div class="custom-row" data-id="${s.id}">
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:600;font-size:15px;">${escapeHtmlBeats(s.name || 'Untitled')}</div>
+              <div class="muted" style="font-size:12px;">${(s.segments || []).length} parts · ${Math.round(totalSec / 60)} min</div>
+            </div>
+            <button class="var-btn" data-act="play" style="background:${isPlaying ? '#c05050' : 'var(--gold)'};color:white;">${isPlaying ? 'Stop' : '▶'}</button>
+            <button class="var-btn" data-act="edit">Edit</button>
+            <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
+          </div>
+        `;
+      }).join('');
+
+    card.innerHTML = `
+      <h3>Custom Songs</h3>
+      <div class="setting-help">Sequence presets into a "song" with per-part duration and volume. Plays segments back-to-back with smooth crossfades.</div>
+      <div id="songs-list" style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">${listHtml}</div>
+      ${editing ? renderSongEditor(editing) : `
+        <div class="row-buttons"><button class="btn-primary" id="songs-add">+ Add custom song</button></div>
+      `}
+    `;
+
+    card.querySelectorAll('.custom-row').forEach((row) => {
+      const id = row.dataset.id;
+      row.querySelector('[data-act="play"]').addEventListener('click', async () => {
+        if (_songActive === id) {
+          stopSong();
+          stopBeats(true);
+        } else {
+          const songs2 = await loadSongs();
+          const s = songs2.find((x) => x.id === id);
+          if (s) playSong(s);
+        }
+        await draw();
+      });
+      row.querySelector('[data-act="edit"]').addEventListener('click', () => {
+        editingId = id;
+        draw();
+      });
+      row.querySelector('[data-act="del"]').addEventListener('click', async () => {
+        if (!confirm('Delete this song?')) return;
+        if (_songActive === id) { stopSong(); stopBeats(true); }
+        const list = await loadSongs();
+        await saveSongs(list.filter((s) => s.id !== id));
+        if (editingId === id) editingId = null;
+        await draw();
+      });
+    });
+
+    if (!editing) {
+      card.querySelector('#songs-add')?.addEventListener('click', () => {
+        const id = 'song_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        const newSong = { id, name: 'New song', segments: [{ wave: 'alpha', durationSec: 600, vol: 18 }] };
+        editingId = id;
+        loadSongs().then((list) => { list.push(newSong); return saveSongs(list); }).then(draw);
+      });
+    } else {
+      wireSongEditor(card, editing, draw, () => { editingId = null; draw(); });
+    }
+  }
+  await draw();
+}
+
+function renderSongEditor(song) {
+  const WAVE_OPTS = ['delta','theta','alpha','beta','gamma'];
+  return `
+    <div style="border-top:1px solid var(--rule);padding-top:14px;margin-top:10px;">
+      <div class="setting-row">
+        <div class="setting-label">Name</div>
+        <input class="input-text" id="se-name" value="${escapeHtmlBeats(song.name || '')}">
+      </div>
+      <div id="se-segs" style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">
+        ${(song.segments || []).map((seg, i) => `
+          <div class="seg-row" data-i="${i}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+            <select class="input-text seg-wave" style="max-width:110px;">
+              ${WAVE_OPTS.map((w) => `<option value="${w}" ${seg.wave===w?'selected':''}>${w[0].toUpperCase()+w.slice(1)}</option>`).join('')}
+            </select>
+            <input type="number" class="input-text seg-min" min="0" max="240" step="1" value="${Math.floor((seg.durationSec || 60) / 60)}" style="max-width:70px;">
+            <span style="align-self:center;font-size:12px;">min</span>
+            <input type="number" class="input-text seg-vol" min="1" max="100" step="1" value="${seg.vol || 20}" style="max-width:70px;">
+            <span style="align-self:center;font-size:12px;">%</span>
+            <button class="var-btn" data-act="seg-del" style="background:#fce4e4;color:var(--e-color);">×</button>
+          </div>
+        `).join('')}
+      </div>
+      <div class="row-buttons">
+        <button class="btn-secondary" id="se-add-seg">+ Add segment</button>
+        <button class="btn-secondary" id="se-cancel">Cancel</button>
+        <button class="btn-primary" id="se-save">Save</button>
+      </div>
+    </div>
+  `;
+}
+
+function wireSongEditor(card, song, draw, cancel) {
+  const WAVE_OPTS = ['delta','theta','alpha','beta','gamma'];
+  card.querySelectorAll('.seg-row').forEach((row) => {
+    row.querySelector('[data-act="seg-del"]').addEventListener('click', () => row.remove());
+  });
+  card.querySelector('#se-add-seg').addEventListener('click', () => {
+    const row = document.createElement('div');
+    row.className = 'seg-row';
+    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
+    row.innerHTML = `
+      <select class="input-text seg-wave" style="max-width:110px;">
+        ${WAVE_OPTS.map((w) => `<option value="${w}">${w[0].toUpperCase()+w.slice(1)}</option>`).join('')}
+      </select>
+      <input type="number" class="input-text seg-min" min="0" max="240" step="1" value="10" style="max-width:70px;">
+      <span style="align-self:center;font-size:12px;">min</span>
+      <input type="number" class="input-text seg-vol" min="1" max="100" step="1" value="20" style="max-width:70px;">
+      <span style="align-self:center;font-size:12px;">%</span>
+      <button class="var-btn" data-act="seg-del" style="background:#fce4e4;color:var(--e-color);">×</button>
+    `;
+    row.querySelector('[data-act="seg-del"]').addEventListener('click', () => row.remove());
+    card.querySelector('#se-segs').appendChild(row);
+  });
+  card.querySelector('#se-cancel').addEventListener('click', cancel);
+  card.querySelector('#se-save').addEventListener('click', async () => {
+    const name = card.querySelector('#se-name').value.trim() || 'Untitled';
+    const segs = [];
+    card.querySelectorAll('.seg-row').forEach((row) => {
+      const wave = row.querySelector('.seg-wave').value;
+      const min = parseInt(row.querySelector('.seg-min').value, 10) || 0;
+      const vol = parseInt(row.querySelector('.seg-vol').value, 10) || 20;
+      if (WAVE_OPTS.includes(wave) && min > 0) segs.push({ wave, durationSec: min * 60, vol: Math.max(1, Math.min(100, vol)) });
+    });
+    if (!segs.length) { showToast('Add at least one segment'); return; }
+    const list = await loadSongs();
+    const idx = list.findIndex((s) => s.id === song.id);
+    if (idx >= 0) list[idx] = { ...song, name, segments: segs };
+    else list.push({ ...song, name, segments: segs });
+    await saveSongs(list);
+    showToast('Song saved');
+    cancel();
+  });
+}
+
+function escapeHtmlBeats(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }

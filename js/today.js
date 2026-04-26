@@ -17,6 +17,18 @@ async function renderDayEditor(record, opts = {}) {
   progressCard.className = 'card';
   const scoreToBeat = await computeScoreToBeat(record.date);
   const proj = await projectUnlockTimes();
+  const momentum = await computeMomentum(record.date);
+  const momCol = momentumColor(momentum);
+
+  // Big momentum tile — first thing on the page
+  const momCard = document.createElement('div');
+  momCard.className = 'card momentum-card' + (momentum != null && momentum >= 100 ? ' glow' : '');
+  momCard.style.background = momCol;
+  momCard.innerHTML = `
+    <div class="mom-label">Momentum</div>
+    <div class="mom-value">${momentum == null ? '—' : momentum + '%'}</div>
+  `;
+  wrap.appendChild(momCard);
   progressCard.innerHTML = `
     <div class="progress-row">
       <div class="progress-bar"><div class="progress-fill" id="ed-progress-fill"></div></div>
@@ -237,6 +249,7 @@ async function renderDayEditor(record, opts = {}) {
     <div class="img-strip" id="ed-img-strip"></div>
     <div class="row-buttons" style="margin-top:8px;">
       <button class="btn-secondary" id="ed-img-add">📷 Add photo (${record.images.length} / 10)</button>
+      <button class="btn-secondary" id="ed-img-edit">✏️ Edit</button>
       <input type="file" id="ed-img-file" accept="image/*" multiple style="display:none;">
     </div>
   `;
@@ -271,19 +284,29 @@ async function renderDayEditor(record, opts = {}) {
   }
   paintImages();
   const fileIn = intCard.querySelector('#ed-img-file');
+  const editBtn = intCard.querySelector('#ed-img-edit');
+  editBtn.addEventListener('click', () => {
+    strip.classList.toggle('editing');
+    editBtn.textContent = strip.classList.contains('editing') ? '✓ Done' : '✏️ Edit';
+  });
   intCard.querySelector('#ed-img-add').addEventListener('click', () => {
     if (record.images.length >= 10) { showToast('Limit of 10 photos per day'); return; }
     fileIn.click();
   });
   fileIn.addEventListener('change', async () => {
-    const files = Array.from(fileIn.files || []);
+    const remaining = 10 - record.images.length;
+    if (remaining <= 0) { showToast('Limit of 10 photos per day'); fileIn.value = ''; return; }
+    const files = Array.from(fileIn.files || []).slice(0, remaining);
+    let added = 0;
     for (const f of files) {
       if (record.images.length >= 10) break;
       try {
         const dataUrl = await compressImage(f, 1280, 0.78);
         record.images.push({ id: 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), dataUrl, takenAt: new Date().toISOString() });
+        added++;
       } catch (e) { showToast('Image add failed'); }
     }
+    if ((fileIn.files?.length || 0) > remaining) showToast(`Only ${added} added — daily limit is 10`);
     fileIn.value = '';
     intCard.querySelector('#ed-img-add').textContent = `📷 Add photo (${record.images.length} / 10)`;
     paintImages();

@@ -17,6 +17,8 @@ async function navigate() {
     t.classList.toggle('active', t.dataset.tab === route);
   });
   const view = document.getElementById('view');
+  // Reset scroll BEFORE render so the URL bar / position:fixed elements settle correctly.
+  window.scrollTo(0, 0);
   view.innerHTML = '<div class="empty-state">Loading…</div>';
   try {
     await ROUTES[route](view);

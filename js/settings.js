@@ -390,25 +390,39 @@ function compressDataUrl(dataUrl, maxDim, quality) {
 function confirmCompressionPreview(origUrl, newUrl, origBytes, newBytes) {
   return new Promise((resolve) => {
     const ov = document.createElement('div');
-    ov.className = 'modal-overlay';
-    ov.style.zIndex = 200;
+    ov.className = 'compress-overlay';
     ov.innerHTML = `
-      <div class="modal" style="max-width:600px;align-self:center;">
-        <h3 style="margin-bottom:10px;">Confirm compression</h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div><div class="muted" style="font-size:12px;text-align:center;">Original (${_fmtBytes(origBytes)})</div><img src="${origUrl}" style="width:100%;border-radius:6px;"></div>
-          <div><div class="muted" style="font-size:12px;text-align:center;">Compressed (${_fmtBytes(newBytes)})</div><img src="${newUrl}" style="width:100%;border-radius:6px;"></div>
+      <div class="compress-head">
+        <button class="modal-back" id="cmp-cancel" aria-label="Cancel">←</button>
+        <div class="compress-title">Compare — swipe sideways</div>
+        <button class="btn-primary" id="cmp-ok" style="min-height:38px;">Replace</button>
+      </div>
+      <div class="compress-strip" id="cmp-strip">
+        <div class="compress-pane">
+          <div class="compress-tag">Original · ${_fmtBytes(origBytes)}</div>
+          <img src="${origUrl}" alt="Original">
         </div>
-        <div class="row-buttons" style="margin-top:14px;">
-          <button class="btn-secondary" id="cmp-cancel">Cancel</button>
-          <button class="btn-primary" id="cmp-ok">Replace with smaller</button>
+        <div class="compress-pane">
+          <div class="compress-tag">Compressed · ${_fmtBytes(newBytes)} (${Math.round((1 - newBytes / origBytes) * 100)}% smaller)</div>
+          <img src="${newUrl}" alt="Compressed">
         </div>
       </div>
+      <div class="compress-dots"><span class="dot active" data-i="0"></span><span class="dot" data-i="1"></span></div>
     `;
     document.body.appendChild(ov);
     const close = (val) => { ov.remove(); resolve(val); };
     ov.querySelector('#cmp-cancel').addEventListener('click', () => close(false));
     ov.querySelector('#cmp-ok').addEventListener('click', () => close(true));
+    const strip = ov.querySelector('#cmp-strip');
+    const dots = ov.querySelectorAll('.compress-dots .dot');
+    strip.addEventListener('scroll', () => {
+      const idx = Math.round(strip.scrollLeft / strip.clientWidth);
+      dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+    });
+    dots.forEach((d) => d.addEventListener('click', () => {
+      const i = parseInt(d.dataset.i, 10);
+      strip.scrollTo({ left: i * strip.clientWidth, behavior: 'smooth' });
+    }));
   });
 }
 
@@ -416,32 +430,69 @@ async function renderCircadianCard(container) {
   const card = document.createElement('div');
   card.className = 'card';
   container.appendChild(card);
-  const WAVE_OPTS = ['delta','theta','alpha','beta','gamma'];
+  // "type" = wave id OR 'volume'. When 'volume', the row's value is a percentage.
+  const TYPE_OPTS = [
+    { v: 'delta',  l: 'Delta' },
+    { v: 'theta',  l: 'Theta' },
+    { v: 'alpha',  l: 'Alpha' },
+    { v: 'beta',   l: 'Beta' },
+    { v: 'gamma',  l: 'Gamma' },
+    { v: 'volume', l: 'Volume %' },
+  ];
+  const WAVE_OPTS = TYPE_OPTS.filter((t) => t.v !== 'volume').map((t) => t.v);
+
+  async function loadMerged() {
+    // Merge transitions and volume nodes into one ordered list.
+    const trans = await getCircadianTransitions();
+    const vols  = await getCircadianVolumeNodes();
+    const merged = [
+      ...trans.map((t) => ({ offsetMin: t.offsetMin, type: t.wave })),
+      ...vols.map((v)  => ({ offsetMin: v.offsetMin, type: 'volume', vol: v.vol })),
+    ];
+    return merged.sort((a, b) => a.offsetMin - b.offsetMin || (a.type === 'volume' ? 1 : -1));
+  }
 
   async function draw() {
-    const transitions = (await getCircadianTransitions()).slice().sort((a,b)=>a.offsetMin-b.offsetMin);
-    const rowsHtml = transitions.map((t) => `
-      <div class="circ-row" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-        ${_hmHtml(t.offsetMin, 23, 5)}
-        <span style="align-self:center;">→</span>
-        <select class="input-text circ-wave" style="max-width:120px;">
-          ${WAVE_OPTS.map((w) => `<option value="${w}" ${t.wave===w?'selected':''}>${w[0].toUpperCase()+w.slice(1)}</option>`).join('')}
-        </select>
-        <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
-      </div>
-    `).join('');
+    const merged = await loadMerged();
+    const rowsHtml = merged.map((n) => {
+      const isVol = n.type === 'volume';
+      return `
+        <div class="circ-row" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+          ${_hmHtml(n.offsetMin, 23, 5)}
+          <span style="align-self:center;">→</span>
+          <select class="input-text circ-type" style="max-width:130px;">
+            ${TYPE_OPTS.map((t) => `<option value="${t.v}" ${t.v===n.type?'selected':''}>${t.l}</option>`).join('')}
+          </select>
+          <input type="number" class="input-text circ-vol" min="1" max="100" step="1" value="${isVol ? (n.vol ?? 20) : ''}" placeholder="%" style="max-width:70px;${isVol?'':'display:none;'}">
+          <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
+        </div>
+      `;
+    }).join('');
     card.innerHTML = `
-      <h3>Circadian Timing</h3>
-      <div class="setting-help">Each row: hours/minutes after wake → which state to play. Rows reorder automatically when saved.</div>
+      <h3>Circadian Schedule</h3>
+      <div class="setting-help">One ordered list of timeline nodes — choose Delta/Theta/Alpha/Beta/Gamma to switch the active state, or Volume % to set the playback level. Times are hours/minutes after wake. Rows reorder on save.</div>
       <div id="circ-list" style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">${rowsHtml}</div>
       <div class="row-buttons">
-        <button class="btn-secondary" id="circ-add">+ Add transition</button>
+        <button class="btn-secondary" id="circ-add">+ Add node</button>
         <button class="btn-secondary" id="circ-reset">Reset to default</button>
         <button class="btn-primary" id="circ-save">Save</button>
+      </div>
+      <div class="setting-row" style="margin-top:14px;border-top:1px solid var(--rule);padding-top:12px;">
+        <div class="setting-label">Test moment</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+          ${_hmHtml(0, 23, 5).replace('hm-h', 'test-h').replace('hm-m', 'test-m')}
+          <button class="btn-primary" id="circ-test" style="min-height:38px;">Test</button>
+        </div>
+        <div class="setting-help">Plays the wave + volume that would play at that time, with smooth fade-in/out so it interleaves with other audio.</div>
       </div>
     `;
     card.querySelectorAll('.circ-row').forEach((row) => {
       row.querySelector('[data-act="del"]').addEventListener('click', () => row.remove());
+      const typeEl = row.querySelector('.circ-type');
+      const volEl = row.querySelector('.circ-vol');
+      typeEl.addEventListener('change', () => {
+        volEl.style.display = typeEl.value === 'volume' ? '' : 'none';
+      });
     });
     card.querySelector('#circ-add').addEventListener('click', () => {
       const row = document.createElement('div');
@@ -449,135 +500,86 @@ async function renderCircadianCard(container) {
       row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
       row.innerHTML = _hmHtml(0, 23, 5) + `
         <span style="align-self:center;">→</span>
-        <select class="input-text circ-wave" style="max-width:120px;">
-          ${WAVE_OPTS.map((w) => `<option value="${w}">${w[0].toUpperCase()+w.slice(1)}</option>`).join('')}
+        <select class="input-text circ-type" style="max-width:130px;">
+          ${TYPE_OPTS.map((t) => `<option value="${t.v}">${t.l}</option>`).join('')}
         </select>
+        <input type="number" class="input-text circ-vol" min="1" max="100" step="1" value="" placeholder="%" style="max-width:70px;display:none;">
         <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
       `;
       row.querySelector('[data-act="del"]').addEventListener('click', () => row.remove());
+      const typeEl = row.querySelector('.circ-type');
+      const volEl = row.querySelector('.circ-vol');
+      typeEl.addEventListener('change', () => {
+        volEl.style.display = typeEl.value === 'volume' ? '' : 'none';
+        if (typeEl.value === 'volume' && !volEl.value) volEl.value = '20';
+      });
       card.querySelector('#circ-list').appendChild(row);
     });
     card.querySelector('#circ-reset').addEventListener('click', async () => {
       await setSetting('circadianTransitions', null);
+      await setSetting('circadianVolumeNodes', null);
       await draw();
       showToast('Reset to defaults');
     });
     card.querySelector('#circ-save').addEventListener('click', async () => {
-      const next = [];
+      const trans = []; const vols = [];
       card.querySelectorAll('.circ-row').forEach((row) => {
         const m = _readHm(row);
-        const w = row.querySelector('.circ-wave').value;
-        if (!isNaN(m) && w) next.push({ offsetMin: m, wave: w });
+        const type = row.querySelector('.circ-type').value;
+        if (type === 'volume') {
+          const v = parseInt(row.querySelector('.circ-vol').value, 10);
+          if (!isNaN(m) && !isNaN(v)) vols.push({ offsetMin: m, vol: Math.max(1, Math.min(100, v)) });
+        } else if (WAVE_OPTS.includes(type)) {
+          if (!isNaN(m)) trans.push({ offsetMin: m, wave: type });
+        }
       });
-      next.sort((a, b) => a.offsetMin - b.offsetMin);
-      await setSetting('circadianTransitions', next);
+      trans.sort((a, b) => a.offsetMin - b.offsetMin);
+      vols.sort((a, b) => a.offsetMin - b.offsetMin);
+      await setSetting('circadianTransitions', trans);
+      await setSetting('circadianVolumeNodes', vols);
       showToast('Schedule saved');
       await draw();
     });
+
+    // Bottom Test
+    const testBtn = card.querySelector('#circ-test');
+    let testActive = false;
+    testBtn.addEventListener('click', async () => {
+      if (testActive) {
+        stopBeats(true);
+        testBtn.textContent = 'Test';
+        testActive = false;
+        return;
+      }
+      const h = parseInt(card.querySelector('.test-h').value, 10) || 0;
+      const m = parseInt(card.querySelector('.test-m').value, 10) || 0;
+      const minute = h * 60 + m;
+      // Determine wave + volume from current saved settings.
+      const trans = await getCircadianTransitions();
+      const vols = await getCircadianVolumeNodes();
+      const sortedT = trans.slice().sort((a,b)=>a.offsetMin-b.offsetMin);
+      let wave = sortedT[sortedT.length-1].wave;
+      for (const t of sortedT) { if (t.offsetMin <= minute) wave = t.wave; else break; }
+      const vol = volumeAtMinute(minute, vols) / 100;
+      stopCircadian();
+      const prev = _beats.volume;
+      _beats.volume = Math.max(0.01, Math.min(1.0, vol));
+      if (_beats.active) transitionToWave(wave); else startBeats(wave);
+      _beats.volume = prev;
+      testBtn.textContent = 'Stop';
+      testActive = true;
+      setTimeout(() => {
+        if (testActive) {
+          stopBeats(true);
+          testBtn.textContent = 'Test';
+          testActive = false;
+        }
+      }, 8000);
+    });
   }
   await draw();
-
-  // Volume curve nodes editor
-  const volCard = document.createElement('div');
-  volCard.className = 'card';
-  container.appendChild(volCard);
-  let _testTimer = null;
-  let _testActiveBtn = null;
-  function stopTest() {
-    if (_testTimer) { clearTimeout(_testTimer); _testTimer = null; }
-    stopBeats(true);
-    if (_testActiveBtn) { _testActiveBtn.textContent = 'Test'; _testActiveBtn = null; }
-  }
-
-  async function drawVol() {
-    const nodes = (await getCircadianVolumeNodes()).slice().sort((a,b)=>a.offsetMin-b.offsetMin);
-    const wakeStr = (await getSetting('wakeTime')) || '05:00';
-    const transitions = await getCircadianTransitions();
-    const waveAtMin = (m) => {
-      const sorted = transitions.slice().sort((a,b) => a.offsetMin - b.offsetMin);
-      let active = sorted[sorted.length-1].wave;
-      for (const t of sorted) { if (t.offsetMin <= m) active = t.wave; else break; }
-      return active;
-    };
-    const rowsHtml = nodes.map((n, i) => `
-      <div class="vol-row" data-i="${i}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-        ${_hmHtml(n.offsetMin, 23, 5)}
-        <span style="align-self:center;font-size:12px;color:var(--ink3);">@</span>
-        <input type="number" class="input-text vol-pct" min="1" max="100" step="1" value="${n.vol}" style="max-width:80px;">
-        <span style="align-self:center;font-size:12px;">%</span>
-        <button class="var-btn vol-test" data-i="${i}" style="background:var(--gold);color:white;">Test</button>
-        <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
-      </div>
-    `).join('');
-    volCard.innerHTML = `
-      <h3>Circadian Volume Curve</h3>
-      <div class="setting-help">Nodes interpolate smoothly through the day. Volumes 1-100%. Test plays the wave that would play at that time at that volume.</div>
-      <div id="vol-list" style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">${rowsHtml}</div>
-      <div class="row-buttons">
-        <button class="btn-secondary" id="vol-add">+ Add node</button>
-        <button class="btn-secondary" id="vol-reset">Reset to default</button>
-        <button class="btn-primary" id="vol-save">Save</button>
-      </div>
-    `;
-    volCard.querySelectorAll('.vol-row').forEach((row) => {
-      row.querySelector('[data-act="del"]').addEventListener('click', () => row.remove());
-      const testBtn = row.querySelector('.vol-test');
-      testBtn.addEventListener('click', async () => {
-        if (_testActiveBtn === testBtn) {
-          stopTest();
-          return;
-        }
-        stopTest();
-        const m = _readHm(row);
-        const pct = Math.max(1, Math.min(100, parseInt(row.querySelector('.vol-pct').value, 10) || 1));
-        const wave = waveAtMin(m);
-        // override global volume for test
-        const prevVol = _beats.volume;
-        _beats.volume = pct / 100;
-        if (typeof stopCircadian === 'function') stopCircadian();
-        startBeats(wave);
-        _beats.volume = prevVol;
-        testBtn.textContent = 'Stop';
-        _testActiveBtn = testBtn;
-        _testTimer = setTimeout(() => {
-          if (_testActiveBtn === testBtn) stopTest();
-        }, 6000);
-      });
-    });
-    volCard.querySelector('#vol-add').addEventListener('click', () => {
-      const row = document.createElement('div');
-      row.className = 'vol-row';
-      row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
-      row.innerHTML = _hmHtml(0, 23, 5) + `
-        <span style="align-self:center;font-size:12px;">@</span>
-        <input type="number" class="input-text vol-pct" min="1" max="100" step="1" value="20" style="max-width:80px;">
-        <span style="align-self:center;font-size:12px;">%</span>
-        <button class="var-btn vol-test" style="background:var(--gold);color:white;">Test</button>
-        <button class="var-btn" data-act="del" style="background:#fce4e4;color:var(--e-color);">×</button>
-      `;
-      row.querySelector('[data-act="del"]').addEventListener('click', () => row.remove());
-      volCard.querySelector('#vol-list').appendChild(row);
-    });
-    volCard.querySelector('#vol-reset').addEventListener('click', async () => {
-      await setSetting('circadianVolumeNodes', null);
-      await drawVol();
-      showToast('Volume curve reset');
-    });
-    volCard.querySelector('#vol-save').addEventListener('click', async () => {
-      const next = [];
-      volCard.querySelectorAll('.vol-row').forEach((row) => {
-        const m = _readHm(row);
-        const v = parseInt(row.querySelector('.vol-pct').value, 10);
-        if (!isNaN(m) && !isNaN(v)) next.push({ offsetMin: m, vol: Math.max(1, Math.min(100, v)) });
-      });
-      next.sort((a, b) => a.offsetMin - b.offsetMin);
-      await setSetting('circadianVolumeNodes', next);
-      showToast('Volume curve saved');
-      await drawVol();
-    });
-  }
-  await drawVol();
 }
+
 
 async function renderCustomGoalsCard(container) {
   const card = document.createElement('div');
