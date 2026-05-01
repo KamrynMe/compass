@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Compass Habits">
+<meta name="apple-mobile-web-app-title" content="Scheduler">
 <meta name="theme-color" content="#c9a84c">
-<title>Compass Habits</title>
+<title>Scheduler</title>
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/favicon.ico">
@@ -15,6 +15,17 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/styles.css">
+<script>
+  // Default to dark to avoid a bright flash before user pref loads.
+  // localStorage key set whenever the user changes the theme so first paint matches.
+  try {
+    var t = localStorage.getItem('themeMode') || 'dark';
+    if (t === 'system') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
+</script>
 </head>
 <body>
 <div id="app">

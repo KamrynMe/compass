@@ -26,6 +26,8 @@ async function renderCalendarView(container) {
   }
   container.innerHTML = '';
 
+  await renderTopDaysSection(container, 'Top 5 Days');
+
   const header = document.createElement('div');
   header.className = 'view-header';
   header.innerHTML = `
@@ -55,6 +57,9 @@ async function renderCalendarView(container) {
     if (_calState.month > 11) { _calState.month = 0; _calState.year++; }
     renderCalendarView(container);
   });
+  // Tap month label to jump to a specific month/year
+  controls.querySelector('#cal-label').style.cursor = 'pointer';
+  controls.querySelector('#cal-label').addEventListener('click', () => openMonthPicker(container));
   header.querySelector('#cal-today').addEventListener('click', () => {
     const n = new Date();
     _calState.year = n.getFullYear();
@@ -97,23 +102,26 @@ async function renderCalendarView(container) {
 
     const pct = rec ? overallCompletion(rec) : 0;
     const isPast = dateISO < today;
+    const isFuture = dateISO > today;
     let bg;
     if (rec) {
       bg = colorForPct(pct);
-    } else if (isPast) {
+    } else if (isFuture) {
+      // Upcoming days now appear dark
       const dark = document.documentElement.getAttribute('data-theme') === 'dark';
-      bg = dark ? '#2a241e' : '#cfc6b8';
+      bg = dark ? '#2a241e' : '#9a8b78';
+    } else if (isPast) {
+      // Past empty days are blank
+      bg = 'transparent';
     } else {
       bg = 'transparent';
     }
     cell.style.background = bg;
-    // White text on every filled cell (brown is dark enough); grey on past empty.
     if (rec) cell.style.setProperty('color', '#ffffff', 'important');
-    else if (isPast) cell.style.setProperty('color', '#6a6050', 'important');
+    else if (isFuture) cell.style.setProperty('color', '#ffffff', 'important');
 
     if (rec && rec.lastEditedAt && !isLateEdit(rec)) cell.classList.add('timely');
 
-    const isFuture = dateISO > today;
     if (isFuture) cell.classList.add('future');
     cell.innerHTML = `<div>${day}</div>`;
     cell.addEventListener('click', () => {
@@ -123,6 +131,28 @@ async function renderCalendarView(container) {
     grid.appendChild(cell);
   }
   container.appendChild(grid);
+
+  // Swipe left/right to change months
+  let touchStartX = null, touchStartY = null;
+  grid.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  grid.addEventListener('touchend', (e) => {
+    if (touchStartX == null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+      if (dx < 0) {
+        _calState.month++;
+        if (_calState.month > 11) { _calState.month = 0; _calState.year++; }
+      } else {
+        _calState.month--;
+        if (_calState.month < 0) { _calState.month = 11; _calState.year--; }
+      }
+      renderCalendarView(container);
+    }
+    touchStartX = touchStartY = null;
+  });
 
   const legend = document.createElement('div');
   legend.className = 'muted';
@@ -256,4 +286,77 @@ async function openDayModal(dateISO) {
     showToast('Saved');
     close();
   });
+}
+
+function openMonthPicker(container) {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = '';
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:340px;height:auto;align-self:center;border-radius:14px;">
+      <h3 style="margin-bottom:12px;">Jump to month</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <label class="muted" style="font-size:12px;">Month
+          <select id="mp-month" class="input-text"></select>
+        </label>
+        <label class="muted" style="font-size:12px;">Year
+          <input id="mp-year" class="input-text" type="number" value="${_calState.year}">
+        </label>
+      </div>
+      <div class="row-buttons" style="margin-top:14px;">
+        <button class="btn-secondary" id="mp-cancel">Cancel</button>
+        <button class="btn-primary" id="mp-go">Go</button>
+      </div>
+    </div>
+  `;
+  root.appendChild(overlay);
+  const sel = overlay.querySelector('#mp-month');
+  for (let i = 0; i < 12; i++) {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = new Date(2000, i, 1).toLocaleDateString(undefined, { month: 'long' });
+    if (i === _calState.month) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  const close = () => { root.innerHTML = ''; };
+  overlay.querySelector('#mp-cancel').addEventListener('click', close);
+  overlay.querySelector('#mp-go').addEventListener('click', () => {
+    _calState.month = parseInt(sel.value, 10);
+    _calState.year = parseInt(overlay.querySelector('#mp-year').value, 10) || _calState.year;
+    close();
+    renderCalendarView(container);
+  });
+}
+
+async function renderTopDaysSection(container, title) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `<h3>${title}</h3><div id="top-days-body" class="muted" style="font-size:14px;">Computing…</div>`;
+  container.appendChild(card);
+  try {
+    const all = await getAllDays();
+    const today = todayISO();
+    const scored = [];
+    for (const r of all) {
+      const s = (await scoreForRecord(r)).score;
+      if (s > 0) scored.push({ date: r.date, score: s });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const top = scored.slice(0, 5);
+    if (!top.length) {
+      card.querySelector('#top-days-body').innerHTML = '<div class="empty-state">No scores yet.</div>';
+      return;
+    }
+    card.querySelector('#top-days-body').innerHTML = top.map((d, i) => {
+      const date = new Date(d.date + 'T12:00:00');
+      const formatted = date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+      const isToday = d.date === today;
+      return `<div class="top-day-row${isToday ? ' is-today' : ''}">${i + 1}. ${formatted}: ${d.score.toLocaleString()} pts</div>`;
+    }).join('');
+  } catch (_) {
+    card.querySelector('#top-days-body').innerHTML = '<div class="empty-state">Could not compute.</div>';
+  }
 }

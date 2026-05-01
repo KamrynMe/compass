@@ -16,6 +16,7 @@ async function renderDayEditor(record, opts = {}) {
   const progressCard = document.createElement('div');
   progressCard.className = 'card';
   const scoreToBeat = await computeScoreToBeat(record.date);
+  const bestScore = await computeBestScore(record.date);
   const proj = await projectUnlockTimes();
   const momObj = await computeMomentum(record.date);
   const momentum = momObj?.pct;
@@ -23,7 +24,7 @@ async function renderDayEditor(record, opts = {}) {
   const debugOn = !!(await getSetting('debugMomentum'));
 
   const momCard = document.createElement('div');
-  momCard.className = 'momentum-card' + (momentum != null && momentum >= 100 ? ' glow' : '');
+  momCard.className = 'momentum-card' + (momentum != null && momentum >= 100 ? ' glow' : '') + (momentum == null ? ' empty' : '');
   let dbgHtml = '';
   if (debugOn && momObj?.debug) {
     const d = momObj.debug;
@@ -44,9 +45,15 @@ async function renderDayEditor(record, opts = {}) {
       `;
     }
   }
+  // Find next incomplete unlocked goal
+  const nextGoal = QUESTIONS.find((q) => unlocked.has(q.id) && (record.questions[q.id]?.value ?? 0) === 0);
+  const nextHtml = nextGoal
+    ? `<div class="mom-upnext"><span class="mom-upnext-label">Up Next:</span> <span class="mom-upnext-text">${nextGoal.displayNum}. ${escapeHtml((nextGoal.emoji || '') + ' ' + nextGoal.text).slice(0, 60)}</span></div>`
+    : `<div class="mom-upnext muted"><span class="mom-upnext-label">Up Next:</span> All unlocked goals worked on today</div>`;
   momCard.innerHTML = `
     <div class="mom-value-wrap"><span class="mom-value" style="color:${momCol};">${momentum == null ? '—' : momentum + '<span class="mom-pct">%</span>'}</span></div>
     <div class="mom-label-wrap"><span class="mom-label">Momentum</span></div>
+    ${nextHtml}
     <div class="mom-debug-slot"></div>
   `;
   if (dbgHtml) momCard.querySelector('.mom-debug-slot').innerHTML = dbgHtml;
@@ -91,14 +98,16 @@ async function renderDayEditor(record, opts = {}) {
       <div class="progress-bar"><div class="progress-fill" id="ed-progress-fill"></div></div>
       <div class="progress-label" id="ed-progress-label">0 / ${unlockedCount}</div>
     </div>
-    <div class="score-row score-row-3">
-      <div><div class="score-label">to Beat</div><div class="score-value" id="ed-beat">${scoreToBeat.toLocaleString()}</div></div>
-      <div><div class="score-label">Daily Score</div><div class="score-value" id="ed-score">0</div></div>
-      <div><div class="score-label">Unlocked By</div><div class="score-value proj" id="proj-current">${proj.currentText}</div></div>
+    <div class="score-row score-row-4">
+      <div><div class="score-label">To Beat</div><div class="score-value tight" id="ed-beat">${scoreToBeat.toLocaleString()}</div></div>
+      <div><div class="score-label">Best</div><div class="score-value tight" id="ed-best">${bestScore.toLocaleString()}</div></div>
+      <div><div class="score-label">Score</div><div class="score-value tight" id="ed-score">0</div></div>
+      <div><div class="score-label">Unlocked By</div><div class="score-value proj tight" id="proj-current">${proj.currentText}</div></div>
     </div>
     <div class="proj-row">
       <div class="proj-line"><span class="proj-label">Unlocked:</span> ${unlockedCount} / ${QUESTIONS.length}</div>
       <div class="proj-line"><span class="proj-label">Fastest possible:</span> <span id="proj-fast">${proj.fastestText}</span></div>
+      ${proj.compareHtml || ''}
     </div>
     <div class="score-tick-row" id="ed-tick">Next per-habit −1 in <span id="ed-tick-val">—</span></div>
   `;
@@ -235,11 +244,11 @@ async function renderDayEditor(record, opts = {}) {
       const days5 = (_e && typeof _e === 'object') ? (_e.daysAt50 || 0) : 0;
       const tier = days5 >= 5 ? 'high' : days5 >= 3 ? 'mid' : 'low';
       const row = document.createElement('div');
-      row.className = 'q' + (q.anchor ? ' anchor' : '') + (qrec.value > 0 ? ' checked' : '') + (isUnlocked ? '' : ' locked');
+      row.className = 'q' + (qrec.value > 0 ? ' checked' : '') + (isUnlocked ? '' : ' locked');
       row.dataset.qid = q.id;
       row.innerHTML = `
         <div class="q-body">
-          <div class="q-text"><span class="q-num">${q.displayNum}.</span> <span class="q-emoji">${q.emoji || ''}</span> ${escapeHtml(q.text)}${q.anchor ? ' <span class="q-star">★ Anchor</span>' : ''}${isUnlocked ? '' : ' <span class="q-lock">🔒 Locked</span>'}</div>
+          <div class="q-text"><span class="q-num">${q.displayNum}.</span> <span class="q-emoji">${q.emoji || ''}</span> ${escapeHtml(q.text)}${isUnlocked ? '' : ' <span class="q-lock">🔒 Locked</span>'}</div>
           <div class="q-note">${escapeHtml(q.note)}</div>
           <div class="q-slider-row">
             <input type="range" class="q-slider" min="0" max="100" step="5" value="${qrec.value}" ${isUnlocked ? '' : 'disabled'} data-q="${q.id}">
@@ -249,6 +258,7 @@ async function renderDayEditor(record, opts = {}) {
             <span class="q-streak ${tier}" title="Days at ≥50% in last 7 days">${days5} / 7 days ≥50% &middot; avg ${avg7}</span>
             <span class="q-points-badge" data-points="${q.id}" style="display:none;"></span>
           </div>
+          ${q.imageDataUrl ? `<div class="q-image${qrec.note ? ' open' : ''}"><img src="${q.imageDataUrl}" alt=""></div>` : ''}
           <textarea class="q-noteinput${qrec.note ? ' open' : ''}" placeholder="Add a note for #${q.displayNum}…" data-note="${q.id}">${escapeHtml(qrec.note || '')}</textarea>
         </div>
         <button type="button" class="q-expand${qrec.note ? ' open' : ''}" aria-label="Toggle note">+</button>
@@ -290,6 +300,8 @@ async function renderDayEditor(record, opts = {}) {
       expandBtn.addEventListener('click', () => {
         noteInput.classList.toggle('open');
         expandBtn.classList.toggle('open');
+        const img = row.querySelector('.q-image');
+        if (img) img.classList.toggle('open');
         if (noteInput.classList.contains('open')) noteInput.focus();
       });
       noteInput.addEventListener('input', () => {
@@ -520,26 +532,32 @@ async function renderDayEditor(record, opts = {}) {
 
 async function computeMomentum(dateISO) {
   const all = await getAllDays();
-  const past6 = all.filter((r) => r.date < dateISO).slice(-6);
-  if (past6.length < 2) return { pct: null, debug: { reason: 'Need at least 2 prior days', past6: past6.length } };
-  const past6Scores = [];
-  for (const r of past6) past6Scores.push({ date: r.date, score: (await scoreForRecord(r)).score });
-  const sumPast6 = past6Scores.reduce((s, x) => s + x.score, 0);
-  const sortedDesc = [...past6Scores].sort((a, b) => b.score - a.score);
+  const past = all.filter((r) => r.date < dateISO);
+  const n = Math.min(6, past.length);
+  if (n < 2) {
+    return { pct: null, debug: { reason: `Need at least 2 prior days (have ${past.length})`, n: past.length } };
+  }
+  const lastN = past.slice(-n);
+  const scores = [];
+  for (const r of lastN) scores.push({ date: r.date, score: (await scoreForRecord(r)).score });
+  const sumLastN = scores.reduce((s, x) => s + x.score, 0);
+  const avgLastN = sumLastN / n;
+  const sortedDesc = [...scores].sort((a, b) => b.score - a.score);
   const top2 = sortedDesc.slice(0, 2);
   const top2Sum = top2.reduce((s, x) => s + x.score, 0);
   const top2Avg = top2.length ? top2Sum / top2.length : 0;
   const todayRec = all.find((r) => r.date === dateISO);
   const todayScore = todayRec ? (await scoreForRecord(todayRec)).score : 0;
-  const yesterdayScore = past6Scores.length ? past6Scores[past6Scores.length - 1].score : 0;
+  const yesterdayScore = scores.length ? scores[scores.length - 1].score : 0;
   const tyAvg = (todayScore + yesterdayScore) / 2;
   const debug = {
-    past6Scores, sumPast6, top2, top2Sum, top2Avg, todayScore, yesterdayScore, tyAvg,
-    factorA: top2Sum > 0 ? sumPast6 / (top2Sum * 3) : 0,
+    n, past6Scores: scores, sumPast6: sumLastN, avgLastN,
+    top2, top2Sum, top2Avg, todayScore, yesterdayScore, tyAvg,
+    factorA: top2Avg > 0 ? avgLastN / top2Avg : 0,
     factorB: top2Avg > 0 ? tyAvg / top2Avg : 0,
   };
-  if (top2Sum === 0 || top2Avg === 0) return { pct: 0, debug };
-  const momentum = (sumPast6 / (top2Sum * 3)) * (tyAvg / top2Avg);
+  if (top2Avg === 0) return { pct: 0, debug };
+  const momentum = (avgLastN / top2Avg) * (tyAvg / top2Avg);
   if (!isFinite(momentum) || momentum < 0) return { pct: 0, debug };
   return { pct: Math.floor(momentum * 100), debug };
 }
@@ -560,6 +578,18 @@ function _lerpHex(a, b, t) {
   return '#' + ((r << 16) | (g << 8) | c).toString(16).padStart(6, '0');
 }
 
+async function computeBestScore(dateISO) {
+  const all = await getAllDays();
+  const past = all.filter((r) => r.date < dateISO);
+  if (!past.length) return 99;
+  let best = 0;
+  for (const r of past) {
+    const s = (await scoreForRecord(r)).score;
+    if (s > best) best = s;
+  }
+  return Math.max(99, best);
+}
+
 async function computeScoreToBeat(dateISO) {
   const all = await getAllDays();
   const past = all.filter((r) => r.date < dateISO);
@@ -573,57 +603,111 @@ async function computeScoreToBeat(dateISO) {
   return Math.max(99, Math.ceil(sum / 2));
 }
 
-async function projectUnlockTimes() {
-  const today = todayISO();
-  const counts = await recentCheckCounts(today);
-  const unlocked = await computeUnlockedSet(today, counts);
+// Steps-remaining helper for parallel-category logic.
+function _stepsForUnlocking(unlocked, targetId) {
+  // Group locked items per pillar in chain order.
+  const byPillar = new Map();
+  for (const q of QUESTIONS) {
+    if (q.pillar === 'prerequisite') continue;
+    if (!byPillar.has(q.pillar)) byPillar.set(q.pillar, []);
+    byPillar.get(q.pillar).push(q);
+  }
+  if (targetId) {
+    const target = QUESTIONS.find((q) => q.id === targetId);
+    if (!target || target.pillar === 'prerequisite' || unlocked.has(targetId)) return 0;
+    const items = byPillar.get(target.pillar) || [];
+    const targetIdx = items.findIndex((q) => q.id === targetId);
+    let firstLockedIdx = items.findIndex((q) => !unlocked.has(q.id));
+    if (firstLockedIdx < 0) return 0;
+    return Math.max(0, targetIdx - firstLockedIdx + 1);
+  }
+  // No specific target: longest locked chain across categories.
+  let max = 0;
+  for (const items of byPillar.values()) {
+    const locked = items.filter((q) => !unlocked.has(q.id)).length;
+    if (locked > max) max = locked;
+  }
+  return max;
+}
+
+async function _projectAtDate(referenceISO) {
+  const counts = await recentCheckCounts(referenceISO);
+  const unlocked = await computeUnlockedSet(referenceISO, counts);
   const targetId = await getSetting('completionTarget');
-  // Determine how many sequential unlock-steps remain.
-  let stepsRemaining;
-  let label = 'Unlocked By';
-  if (targetId && QUESTIONS.find((q) => q.id === targetId)) {
-    if (unlocked.has(targetId)) {
-      return { fastestText: 'Already unlocked', currentText: 'Already unlocked' };
-    }
-    const targetIdx = QUESTIONS.findIndex((q) => q.id === targetId);
-    // Highest unlocked index in chain
-    let highestUnlockedIdx = -1;
-    for (let i = 0; i < QUESTIONS.length; i++) {
-      if (unlocked.has(QUESTIONS[i].id) && i < targetIdx) highestUnlockedIdx = i;
-    }
-    stepsRemaining = targetIdx - highestUnlockedIdx; // sequential steps to satisfy
-  } else {
-    stepsRemaining = QUESTIONS.filter((q) => !unlocked.has(q.id)).length;
-  }
-  if (stepsRemaining <= 0) {
-    return { fastestText: 'Done', currentText: 'Done' };
-  }
-  // Each unlock requires the predecessor to be ≥50% on 5 of 7 days → 5 calendar days fastest.
-  const fastestDays = stepsRemaining * 5;
-  // Compute observed probability p of hitting ≥50% on a given (goal, day) over last 7 days.
-  let p = 0;
+  const steps = _stepsForUnlocking(unlocked, targetId);
+  if (steps <= 0) return { steps: 0, fastestDays: 0, currentDays: 0 };
+  const fastestDays = steps * 5;
+  // Probability over reference date's last 7 days.
   const all = await getAllDays();
-  const last7 = all.slice(-7);
-  let hits = 0, totalObs = 0;
-  for (const r of last7) {
+  const refDate = new Date(referenceISO + 'T00:00:00');
+  const refStart = new Date(refDate); refStart.setDate(refStart.getDate() - 6);
+  const refStartISO = refStart.toISOString().slice(0, 10);
+  let hits = 0, total = 0;
+  for (const r of all) {
+    if (r.date < refStartISO || r.date > referenceISO) continue;
     if (!r.questions) continue;
     for (const q of QUESTIONS) {
       const qr = r.questions[q.id];
       if (!qr) continue;
       const v = qr.value != null ? qr.value : (qr.checked ? 100 : 0);
-      // only count goals that were actually accessible (have any value or note recorded)
-      if (qr.value != null || qr.checked === true || qr.checked === false) {
-        totalObs++;
-        if (v >= 50) hits++;
-      }
+      total++;
+      if (v >= 50) hits++;
     }
   }
-  if (totalObs > 0) p = hits / totalObs;
-  const currentDays = p > 0 ? Math.ceil(stepsRemaining * (5 / p)) : Infinity;
+  const p = total > 0 ? hits / total : 0;
+  const currentDays = p > 0 ? Math.ceil(steps * (5 / p)) : Infinity;
+  return { steps, fastestDays, currentDays: !isFinite(currentDays) || currentDays <= 0 ? fastestDays : currentDays };
+}
+
+async function projectUnlockTimes() {
+  const today = todayISO();
+  const now = await _projectAtDate(today);
+  if (now.steps <= 0) {
+    return { fastestText: 'Done', currentText: 'Done', compareHtml: '' };
+  }
+  // 7-days-ago comparison
+  let compareHtml = '';
+  try {
+    const ref = new Date(today + 'T00:00:00'); ref.setDate(ref.getDate() - 7);
+    const refISO = ref.toISOString().slice(0, 10);
+    const past = await _projectAtDate(refISO);
+    // Convert "from-then" days to absolute dates measured from refISO so we can compare to the today numbers.
+    const fastestPastAbs = past.fastestDays - 7; // remaining if we'd been on track from then
+    const currentPastAbs = past.currentDays - 7;
+    const fastDiff = now.fastestDays - fastestPastAbs;
+    const projDiff = now.currentDays - currentPastAbs;
+    const fmtDiff = (d) => {
+      if (!isFinite(d)) return '—';
+      const sign = d <= 0 ? 'shorter' : 'longer';
+      const abs = Math.abs(d);
+      return `${ymdShort(abs)} ${sign}`;
+    };
+    compareHtml = `
+      <div class="proj-line"><span class="proj-label">Fastest 7d ago:</span> ${past.fastestDays > 0 ? addDaysFmt(past.fastestDays - 7) : 'Done'}</div>
+      <div class="proj-line"><span class="proj-label">Δ:</span> ${fmtDiff(fastDiff)}</div>
+      <div class="proj-line"><span class="proj-label">Unlocked by 7d ago:</span> ${past.currentDays > 0 ? addDaysFmt(past.currentDays - 7) : 'Done'}</div>
+      <div class="proj-line"><span class="proj-label">Δ:</span> ${fmtDiff(projDiff)}</div>
+    `;
+  } catch (_) {}
   return {
-    fastestText: addDaysFmt(fastestDays),
-    currentText: !isFinite(currentDays) || currentDays <= 0 ? addDaysFmt(fastestDays) : addDaysFmt(currentDays),
+    fastestText: addDaysFmt(now.fastestDays),
+    currentText: addDaysFmt(now.currentDays),
+    compareHtml,
   };
+}
+
+function ymdShort(days) {
+  const d = Math.max(0, Math.round(days));
+  if (d === 0) return '0d';
+  const y = Math.floor(d / 365);
+  const rem = d - y * 365;
+  const m = Math.floor(rem / 30);
+  const dd = rem - m * 30;
+  const parts = [];
+  if (y) parts.push(y + 'y');
+  if (m) parts.push(m + 'mo');
+  if (dd || !parts.length) parts.push(dd + 'd');
+  return parts.join(' ');
 }
 
 function addDaysFmt(days) {

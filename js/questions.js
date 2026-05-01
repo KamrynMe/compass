@@ -3,67 +3,67 @@
 // Custom user goals are merged into QUESTIONS at runtime via rebuildQuestions().
 const ORIGINAL_QUESTIONS = [
   // PREREQUISITE
-  { id: 'q8',  pillar: 'prerequisite', anchor: true,  emoji: '🛏️', text: 'Did you seal off, prime, and protect your sleep window?',
+  { id: 'q8',  pillar: 'prerequisite',  emoji: '🛏️', text: 'Did you seal off, prime, and protect your sleep window?',
     note: 'Melatonin, light, wind-down.' },
 
   // SPIRITUAL
-  { id: 'q1',  pillar: 'spiritual', anchor: true,  emoji: '📖', text: 'Did you do the text?',
+  { id: 'q1',  pillar: 'spiritual',  emoji: '📖', text: 'Did you do the text?',
     note: "Daily Text read, meditated on, and applied to today's outlook." },
-  { id: 'q2',  pillar: 'spiritual', anchor: true,  emoji: '📚', text: 'Did you read and meditate on meeting preparation?',
+  { id: 'q2',  pillar: 'spiritual',  emoji: '📚', text: 'Did you read and meditate on meeting preparation?',
     note: 'Watchtower (Sun), CBS (Thu), CLAM (Tue) — whichever is next.' },
-  { id: 'q3',  pillar: 'spiritual', anchor: false, emoji: '🏠', text: 'How can you care for your necessary familial relationships?',
+  { id: 'q3',  pillar: 'spiritual', emoji: '🏠', text: 'How can you care for your necessary familial relationships?',
     note: 'One intentional act of presence today.' },
-  { id: 'q4',  pillar: 'spiritual', anchor: false, emoji: '🖥️', text: 'What supplementary studying is available?',
+  { id: 'q4',  pillar: 'spiritual', emoji: '🖥️', text: 'What supplementary studying is available?',
     note: 'Broadcasting, videos, personal study beyond meeting prep.' },
-  { id: 'q5',  pillar: 'spiritual', anchor: false, emoji: '🧆', text: 'How can you make the congregation warmer?',
+  { id: 'q5',  pillar: 'spiritual', emoji: '🧆', text: 'How can you make the congregation warmer?',
     note: 'One act of warmth — a text, a conversation, noticing someone.' },
-  { id: 'q6',  pillar: 'spiritual', anchor: true,  emoji: '🗂️', text: 'How can you expand your preaching and teaching?',
+  { id: 'q6',  pillar: 'spiritual',  emoji: '🗂️', text: 'How can you expand your preaching and teaching?',
     note: 'Territory, return visits, informal witness.' },
-  { id: 'q7',  pillar: 'spiritual', anchor: false, emoji: '🏔️', text: 'How can you support Jehovah in specialized ways?',
+  { id: 'q7',  pillar: 'spiritual', emoji: '🏔️', text: 'How can you support Jehovah in specialized ways?',
     note: 'LDC contribution, specialized assignments, kingdom hall care.' },
 
   // HEALTH (sleep moved to prerequisite)
-  { id: 'q9',  pillar: 'health', anchor: true,  emoji: '🍗', text: 'Are you eating healthily?',
+  { id: 'q9',  pillar: 'health',  emoji: '🍗', text: 'Are you eating healthily?',
     note: 'Huel + Berries base. Fasted window honored. Gut health.' },
-  { id: 'q10', pillar: 'health', anchor: true,  emoji: '⛹🏽‍♂️', text: 'Are you getting stronger and more capable?',
+  { id: 'q10', pillar: 'health',  emoji: '⛹🏽‍♂️', text: 'Are you getting stronger and more capable?',
     note: 'Training completed. Hot/cold exposure.' },
-  { id: 'q11', pillar: 'health', anchor: false, emoji: '🥬', text: 'Neurogenesis, Stem cells, Telomeres, Mitochondria, Inflammation, Autophagy.',
+  { id: 'q11', pillar: 'health', emoji: '🥬', text: 'Neurogenesis, Stem cells, Telomeres, Mitochondria, Inflammation, Autophagy.',
     note: 'Are longevity protocols active this week?' },
 
   // STRATEGY
-  { id: 'q12', pillar: 'strategy', anchor: true,  emoji: '🧮', text: 'Organized systems to automate days and weeks — preparation for alpha flow state?',
+  { id: 'q12', pillar: 'strategy',  emoji: '🧮', text: 'Organized systems to automate days and weeks — preparation for alpha flow state?',
     note: "Tomorrow's environment set. Friction removed." },
-  { id: 'q13', pillar: 'strategy', anchor: false, emoji: '🧠', text: 'Time allocated for Gamma schedule scrutinization for improvement?',
+  { id: 'q13', pillar: 'strategy', emoji: '🧠', text: 'Time allocated for Gamma schedule scrutinization for improvement?',
     note: 'Weekly audit of the structure.' },
-  { id: 'q14', pillar: 'strategy', anchor: false, emoji: '🧘🏾‍♂️', text: 'Protected space and time for Theta gratitude and visualization?',
+  { id: 'q14', pillar: 'strategy', emoji: '🧘🏾‍♂️', text: 'Protected space and time for Theta gratitude and visualization?',
     note: 'Quiet, unscheduled. Image, feel, gratitude.' },
-  { id: 'q15', pillar: 'strategy', anchor: false, emoji: '🔨', text: 'Does Beta have a job this week?',
+  { id: 'q15', pillar: 'strategy', emoji: '🔨', text: 'Does Beta have a job this week?',
     note: 'Reactive mode assigned specific slots.' },
-  { id: 'q16', pillar: 'strategy', anchor: false, emoji: '🎵', text: 'Music set aside to support all modes?',
+  { id: 'q16', pillar: 'strategy', emoji: '🎵', text: 'Music set aside to support all modes?',
     note: 'Alpha, theta, ambient audio environment ready.' },
 
   // FINANCIAL
-  { id: 'q17', pillar: 'financial', anchor: true,  emoji: '🤹', text: 'Psychology hitting the mark in real life practice?',
+  { id: 'q17', pillar: 'financial',  emoji: '🤹', text: 'Psychology hitting the mark in real life practice?',
     note: 'Where did it land this week?' },
-  { id: 'q18', pillar: 'financial', anchor: false, emoji: '🎡', text: 'Is what can be reliably automated, automated?',
+  { id: 'q18', pillar: 'financial', emoji: '🎡', text: 'Is what can be reliably automated, automated?',
     note: 'One system to build or refine this week.' },
 
   // ENJOYMENT
-  { id: 'q19', pillar: 'enjoyment', anchor: false, emoji: '🫂', text: 'How can I be a good friend to two people this week?',
+  { id: 'q19', pillar: 'enjoyment', emoji: '🫂', text: 'How can I be a good friend to two people this week?',
     note: 'Name them. One specific act each.' },
-  { id: 'q20', pillar: 'enjoyment', anchor: false, emoji: '🐬', text: 'How can I connect with what Jehovah created this week?',
+  { id: 'q20', pillar: 'enjoyment', emoji: '🐬', text: 'How can I connect with what Jehovah created this week?',
     note: 'Outside. Full attention. 15 minutes minimum.' },
-  { id: 'q21', pillar: 'enjoyment', anchor: false, emoji: '🃏', text: 'How can I strengthen my logical strategic muscle under fun, safe conditions?',
+  { id: 'q21', pillar: 'enjoyment', emoji: '🃏', text: 'How can I strengthen my logical strategic muscle under fun, safe conditions?',
     note: 'Chess, puzzles, games.' },
-  { id: 'q22', pillar: 'enjoyment', anchor: false, emoji: '🏏', text: 'How can I create fun situations for new people?',
+  { id: 'q22', pillar: 'enjoyment', emoji: '🏏', text: 'How can I create fun situations for new people?',
     note: 'Curate a context, not a conversation.' },
-  { id: 'q23', pillar: 'enjoyment', anchor: false, emoji: '🗣️', text: 'How can I be comfortable, myself, and spontaneous?',
+  { id: 'q23', pillar: 'enjoyment', emoji: '🗣️', text: 'How can I be comfortable, myself, and spontaneous?',
     note: 'Leave one window truly open this week.' },
-  { id: 'q24', pillar: 'enjoyment', anchor: false, emoji: '⛓️', text: 'How can I build something soon?',
+  { id: 'q24', pillar: 'enjoyment', emoji: '⛓️', text: 'How can I build something soon?',
     note: 'Physical, digital, or conceptual. Schedule it.' },
-  { id: 'q25', pillar: 'enjoyment', anchor: false, emoji: '🪐', text: 'How can I learn about physics soon?',
+  { id: 'q25', pillar: 'enjoyment', emoji: '🪐', text: 'How can I learn about physics soon?',
     note: 'One concept. One video. One thought experiment.' },
-  { id: 'q26', pillar: 'enjoyment', anchor: false, emoji: '🎹', text: 'When can I learn about music, so I can eventually make it?',
+  { id: 'q26', pillar: 'enjoyment', emoji: '🎹', text: 'When can I learn about music, so I can eventually make it?',
     note: 'Theory, ear training. Learning is the path.' },
 ];
 
@@ -75,31 +75,48 @@ function displayNumberFor(qid) {
   return q?.displayNum || '?';
 }
 
-async function loadCustomGoals() {
-  return (await getSetting('customGoals')) || [];
-}
-
-async function saveCustomGoals(list) {
-  await setSetting('customGoals', list);
-}
-
-// Rebuild QUESTIONS in place: originals first, then insert each custom after its anchor.
-function rebuildQuestionsFrom(customs) {
-  const list = ORIGINAL_QUESTIONS.map((q) => ({ ...q, original: true }));
-  const remaining = [...customs];
-  let safety = remaining.length * 4 + 4;
-  while (remaining.length && safety-- > 0) {
-    const c = remaining.shift();
-    const idx = c.afterId ? list.findIndex((q) => q.id === c.afterId) : -1;
-    if (idx >= 0) {
-      list.splice(idx + 1, 0, { ...c, custom: true });
-    } else if (!c.afterId) {
-      list.push({ ...c, custom: true });
-    } else {
-      remaining.push(c);
+// All goals (originals + customs + edits) live in a single user list now.
+async function loadUserGoals() {
+  let list = await getSetting('userGoals');
+  if (!Array.isArray(list) || !list.length) {
+    // Migrate from older customGoals setting if present
+    const customs = (await getSetting('customGoals')) || [];
+    const merged = ORIGINAL_QUESTIONS.map((q) => ({ ...q, original: true }));
+    const remaining = [...customs];
+    let safety = remaining.length * 4 + 4;
+    while (remaining.length && safety-- > 0) {
+      const c = remaining.shift();
+      const idx = c.afterId ? merged.findIndex((q) => q.id === c.afterId) : -1;
+      if (idx >= 0) merged.splice(idx + 1, 0, { ...c, custom: true });
+      else if (!c.afterId) merged.push({ ...c, custom: true });
+      else remaining.push(c);
     }
+    for (const c of remaining) merged.push({ ...c, custom: true });
+    list = merged;
+    await setSetting('userGoals', list);
   }
-  for (const c of remaining) list.push({ ...c, custom: true });
+  return list;
+}
+
+async function saveUserGoals(list) {
+  await setSetting('userGoals', list);
+}
+
+async function resetGoalsToDefault() {
+  const list = ORIGINAL_QUESTIONS.map((q) => ({ ...q, original: true }));
+  await setSetting('userGoals', list);
+  QUESTIONS.length = 0;
+  for (let i = 0; i < list.length; i++) {
+    list[i].displayNum = i + 1;
+    QUESTIONS.push(list[i]);
+  }
+}
+
+// Backwards-compat shims for callers still using the old API.
+async function loadCustomGoals() { return loadUserGoals(); }
+async function saveCustomGoals(list) { return saveUserGoals(list); }
+
+function rebuildQuestionsFrom(list) {
   QUESTIONS.length = 0;
   for (let i = 0; i < list.length; i++) {
     list[i].displayNum = i + 1;
@@ -108,8 +125,8 @@ function rebuildQuestionsFrom(customs) {
 }
 
 async function initQuestions() {
-  const customs = await loadCustomGoals();
-  rebuildQuestionsFrom(customs);
+  const list = await loadUserGoals();
+  rebuildQuestionsFrom(list);
 }
 
 // Display number = 1-based index in current QUESTIONS order.
@@ -233,26 +250,30 @@ function _ok(c, qid) {
 async function computeUnlockedSet(dateISO, counts) {
   const c = counts || (await recentCheckCounts(dateISO));
   const unlocked = new Set();
-  // Pass 1 — unconditional unlocks: ORIGINAL prereqs + the first non-prereq habit.
+  // Group by pillar in QUESTIONS order.
+  const byPillar = new Map();
   for (const q of QUESTIONS) {
-    if (q.pillar === 'prerequisite' && !q.custom) unlocked.add(q.id);
+    if (!byPillar.has(q.pillar)) byPillar.set(q.pillar, []);
+    byPillar.get(q.pillar).push(q);
   }
-  const firstNonPrereqIdx = QUESTIONS.findIndex((q) => q.pillar !== 'prerequisite');
-  if (firstNonPrereqIdx >= 0) unlocked.add(QUESTIONS[firstNonPrereqIdx].id);
-
-  // Pass 2 — chain gates everything else. Custom prereqs participate.
-  let prevSatisfied = true;
-  for (let i = 0; i < QUESTIONS.length; i++) {
-    const q = QUESTIONS[i];
-    if (unlocked.has(q.id)) {
-      prevSatisfied = _ok(c, q.id);
+  for (const [pillar, items] of byPillar) {
+    if (!items.length) continue;
+    // Prerequisite: ALL items always unlocked, regardless of original/custom status.
+    if (pillar === 'prerequisite') {
+      for (const q of items) unlocked.add(q.id);
       continue;
     }
-    if (prevSatisfied) {
-      unlocked.add(q.id);
-      prevSatisfied = _ok(c, q.id);
-    } else {
-      prevSatisfied = false;
+    // For every other category: first item always unlocked. Items 2+ gate on
+    // their predecessor (within this category) hitting ≥50% on 5 of last 7 days.
+    unlocked.add(items[0].id);
+    let prevSatisfied = _ok(c, items[0].id);
+    for (let i = 1; i < items.length; i++) {
+      if (prevSatisfied) {
+        unlocked.add(items[i].id);
+        prevSatisfied = _ok(c, items[i].id);
+      } else {
+        prevSatisfied = false;
+      }
     }
   }
   return unlocked;
@@ -310,7 +331,8 @@ async function pointsForCheck(record, qid) {
   return Math.round(v * scoreMultiplierFor(t, wake, wind, record.date));
 }
 
-// Total daily score = Σ value × multiplier per habit. Possible = N habits × 500.
+// Total daily score = Σ ROUND(value × multiplier) per habit. Round per-habit so
+// the daily total matches what the per-row badges add up to.
 async function scoreForRecord(record) {
   if (!record) return { score: 0, possible: 0, checks: 0 };
   const { wake, wind } = await getWakeWind();
@@ -322,11 +344,11 @@ async function scoreForRecord(record) {
     const v = valueOf(qr);
     if (v > 0) {
       const t = qr.firstSetAt || qr.checkedAt || qr.lastChangedAt || record.lastEditedAt;
-      total += v * scoreMultiplierFor(t, wake, wind, record.date);
+      total += Math.round(v * scoreMultiplierFor(t, wake, wind, record.date));
       checks++;
     }
   }
-  return { score: Math.round(total), possible: QUESTIONS.length * 500, checks };
+  return { score: total, possible: QUESTIONS.length * 500, checks };
 }
 
 // Seconds until the multiplier for a habit set NOW will tick down by enough to

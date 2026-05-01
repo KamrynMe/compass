@@ -38,6 +38,19 @@ function buildVariableCatalog() {
       },
     });
   }
+  // Days of week (binary 100/0)
+  const DOW_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  for (let i = 0; i < 7; i++) {
+    vars.push({
+      id: 'dow:' + i,
+      name: DOW_NAMES[i],
+      group: 'Day of week',
+      get: (r) => {
+        const d = new Date(r.date + 'T12:00:00');
+        return d.getDay() === i ? 100 : 0;
+      },
+    });
+  }
   // Weather
   vars.push({ id: 'w:temp6am', name: '6am Temperature (°F)', group: 'Weather',
     get: (r) => r.weather ? r.weather.temp6am : null });

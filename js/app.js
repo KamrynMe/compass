@@ -31,7 +31,8 @@ async function navigate() {
 
 window.addEventListener('hashchange', navigate);
 function applyTheme(setting) {
-  let t = setting || 'system';
+  let t = setting || 'dark';
+  try { localStorage.setItem('themeMode', setting || 'dark'); } catch (_) {}
   if (t === 'system') {
     t = matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
@@ -50,8 +51,10 @@ if (matchMedia) {
 window.addEventListener('DOMContentLoaded', async () => {
   if (!location.hash) location.hash = '#today';
   try { await initQuestions(); } catch (_) {}
-  try { applyTheme((await getSetting('themeMode')) || 'system'); } catch (_) {}
+  try { applyTheme((await getSetting('themeMode')) || 'dark'); } catch (_) {}
+  try { await maybePromptWakeTime(); } catch (_) {}
   navigate();
+  setupTabDoubleTap();
 
   // Re-arm reminder if set
   try {
@@ -106,6 +109,116 @@ async function maybeShowBackupBanner() {
     wrap.remove();
     showToast('Exported');
   });
+}
+
+async function maybePromptWakeTime() {
+  const wake = await getSetting('wakeTime');
+  const all = await getAllDays();
+  if (wake || all.length > 0) return;
+  // Show blocking modal
+  const root = document.getElementById('modal-root');
+  root.innerHTML = '';
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:420px;height:auto;align-self:center;border-radius:14px;">
+      <h2 style="margin-bottom:6px;">Welcome to Scheduler</h2>
+      <div class="muted" style="font-size:14px;line-height:1.5;margin-bottom:14px;">First, set your wake-up time. Your daily score, multipliers, and the circadian beat schedule all key off it. <strong>You can change this any time in Settings.</strong></div>
+      <div class="setting-row">
+        <div class="setting-label">Wake-up time</div>
+        <input class="input-text" type="time" step="300" id="wt-time" value="05:00">
+      </div>
+      <div class="row-buttons" style="margin-top:14px;">
+        <button class="btn-primary" id="wt-save" style="flex:1;">Save & continue</button>
+      </div>
+    </div>
+  `;
+  root.appendChild(overlay);
+  return new Promise((resolve) => {
+    overlay.querySelector('#wt-save').addEventListener('click', async () => {
+      const v = overlay.querySelector('#wt-time').value || '05:00';
+      await setSetting('wakeTime', v);
+      await setSetting('winddownTime', winddownFromWake(v));
+      root.innerHTML = '';
+      resolve();
+    });
+  });
+}
+
+let _lastTabTap = { tab: null, time: 0 };
+function setupTabDoubleTap() {
+  const bar = document.getElementById('tabbar');
+  if (!bar) return;
+  bar.addEventListener('click', async (e) => {
+    const tab = e.target.closest('.tab');
+    if (!tab) return;
+    const id = tab.dataset.tab;
+    const now = Date.now();
+    if (_lastTabTap.tab === id && (now - _lastTabTap.time) < 450) {
+      _lastTabTap = { tab: null, time: 0 };
+      e.preventDefault();
+      await handleTabDoubleTap(id);
+      return;
+    }
+    _lastTabTap = { tab: id, time: now };
+  });
+}
+
+async function handleTabDoubleTap(id) {
+  if (id === 'today') {
+    if (location.hash !== '#today') { location.hash = '#today'; await new Promise((r) => setTimeout(r, 60)); }
+    // Scroll to first uncompleted (value 0) unlocked goal
+    const rows = document.querySelectorAll('.q:not(.locked)');
+    for (const row of rows) {
+      const slider = row.querySelector('.q-slider');
+      if (slider && parseInt(slider.value, 10) === 0) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
+    showToast('All unlocked goals worked on already!');
+  } else if (id === 'calendar') {
+    if (location.hash !== '#calendar') { location.hash = '#calendar'; await new Promise((r) => setTimeout(r, 60)); }
+    const btn = document.getElementById('cal-today');
+    if (btn) btn.click();
+  } else if (id === 'beats') {
+    if (typeof _beats !== 'undefined' && _beats.circadian) {
+      stopCircadian();
+      stopBeats(true);
+      showToast('Circadian stopped');
+    } else if (typeof startCircadian === 'function') {
+      await startCircadian();
+      showToast('Circadian started');
+    }
+  } else if (id === 'settings') {
+    const cur = (await getSetting('themeMode')) || 'system';
+    let next;
+    if (cur === 'light') next = 'dark';
+    else if (cur === 'dark') next = 'light';
+    else next = matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    await setSetting('themeMode', next);
+    applyTheme(next);
+    showToast('Theme: ' + next);
+  } else if (id === 'analytics') {
+    if (location.hash !== '#analytics') { location.hash = '#analytics'; await new Promise((r) => setTimeout(r, 100)); }
+    // Pick "Daily Score (points)" in the Relationships Ranking and scroll to it
+    const card = document.getElementById('relationships-ranking');
+    if (card) {
+      const buttons = card.querySelectorAll('.var-list .var-btn');
+      // Find the row whose name matches Daily Score
+      const items = card.querySelectorAll('.var-list .var-item');
+      for (const it of items) {
+        if (/Daily Score/i.test(it.textContent)) {
+          const b = it.querySelector('button');
+          if (b && !b.classList.contains('on')) b.click();
+          break;
+        }
+      }
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
 }
 
 function showToast(msg, ms = 2200) {

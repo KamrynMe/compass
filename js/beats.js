@@ -28,22 +28,77 @@ const _beats = {
   volume: 0.18,
   durationSec: 0,
   stopTimer: null,
+  swapTimer: null,
+  swapState: false,
 };
 
+function _scheduleEarSwap() {
+  if (_beats.swapTimer) { clearInterval(_beats.swapTimer); _beats.swapTimer = null; }
+  _beats.swapTimer = setInterval(() => {
+    if (!_beats.oscL || !_beats.oscR || !_beats.ctx) return;
+    const wave = WAVES.find((w) => w.id === _beats.active);
+    if (!wave) return;
+    _beats.swapState = !_beats.swapState;
+    const lo = wave.carrier - wave.beat / 2;
+    const hi = wave.carrier + wave.beat / 2;
+    const targetL = _beats.swapState ? hi : lo;
+    const targetR = _beats.swapState ? lo : hi;
+    try {
+      _beats.oscL.frequency.setTargetAtTime(targetL, _beats.ctx.currentTime, 3);
+      _beats.oscR.frequency.setTargetAtTime(targetR, _beats.ctx.currentTime, 3);
+    } catch (_) {}
+  }, 90 * 1000);
+}
+
+// Silent looping audio element forces iOS Safari to use the "playback" audio
+// session category, which keeps Web Audio audible even when the ringer switch is off.
+let _silentEl = null;
+function _ensureSilentLoop() {
+  if (_silentEl) return;
+  _silentEl = document.createElement('audio');
+  _silentEl.setAttribute('playsinline', '');
+  _silentEl.setAttribute('webkit-playsinline', '');
+  _silentEl.loop = true;
+  _silentEl.preload = 'auto';
+  // 1-second silent WAV (44.1 kHz mono). Tiny base64 payload.
+  _silentEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
+  _silentEl.style.display = 'none';
+  document.body.appendChild(_silentEl);
+}
+
 function _ensureCtx() {
+  _ensureSilentLoop();
+  // Try to start the silent loop on every gesture — iOS allows it after first user touch.
+  if (_silentEl && _silentEl.paused) {
+    _silentEl.play().catch(() => {});
+  }
   if (!_beats.ctx) {
     const Ctor = window.AudioContext || window.webkitAudioContext;
     if (!Ctor) return null;
-    // latencyHint: 'playback' encourages mixing with other audio (Spotify etc) on iOS
     _beats.ctx = new Ctor({ latencyHint: 'playback' });
   }
   if (_beats.ctx.state === 'suspended') _beats.ctx.resume();
   return _beats.ctx;
 }
 
+// Cleanly stop beats when the page is hidden (PWA closed / backgrounded) so the
+// AudioContext doesn't glitch into the 8-bit sounding artifact iOS produces when
+// it abruptly suspends mid-oscillator.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      try { stopCircadian && stopCircadian(); } catch (_) {}
+      try { stopSong && stopSong(); } catch (_) {}
+      try { stopBeats(true); } catch (_) {}
+    }
+  });
+}
+
 function _hardStop() {
   if (_beats.stopTimer) { clearTimeout(_beats.stopTimer); _beats.stopTimer = null; }
   if (_beats.pulseTimer) { clearInterval(_beats.pulseTimer); _beats.pulseTimer = null; }
+  if (_beats.swapTimer) { clearInterval(_beats.swapTimer); _beats.swapTimer = null; }
+  _beats.swapState = false;
   try { if (_beats.oscL) _beats.oscL.stop(); } catch (_) {}
   try { if (_beats.oscR) _beats.oscR.stop(); } catch (_) {}
   try { if (_beats.oscL) _beats.oscL.disconnect(); } catch (_) {}
@@ -52,6 +107,7 @@ function _hardStop() {
   _beats.oscL = null; _beats.oscR = null; _beats.gain = null;
   _beats.active = null;
   releaseWakeLock();
+  if (_silentEl && !_silentEl.paused) { try { _silentEl.pause(); } catch (_) {} }
 }
 
 // Smooth crossfade: fade current beats out while next fades in.
@@ -98,6 +154,7 @@ function transitionToWave(waveId, fadeSec = 2.0) {
   oscL.start(); oscR.start();
   _beats.oscL = oscL; _beats.oscR = oscR; _beats.gain = gain;
   _beats.active = waveId;
+  _scheduleEarSwap();
   if (wave.pulsate) {
     const period = wave.pulsePeriod || 15;
     const depth = wave.pulseDepth || 0.4;
@@ -230,8 +287,7 @@ function playSong(song) {
   playSegment();
 }
 
-async function applyCircadianVolume() {
-  if (!_beats.circadian || !_beats.gain || !_beats.ctx) return;
+async function _circadianVolumeNow() {
   const wakeStr = (await getSetting('wakeTime')) || '05:00';
   const [wH, wM] = wakeStr.split(':').map(Number);
   const now = new Date();
@@ -239,21 +295,34 @@ async function applyCircadianVolume() {
   const minsNow = now.getHours() * 60 + now.getMinutes();
   const m = (minsNow - wakeMin + 24 * 60) % (24 * 60);
   const nodes = await getCircadianVolumeNodes();
-  const pct = Math.max(1, Math.min(100, volumeAtMinute(m, nodes)));
-  const target = pct / 100;
+  return Math.max(1, Math.min(100, volumeAtMinute(m, nodes))) / 100;
+}
+
+async function applyCircadianVolume() {
+  if (!_beats.circadian || !_beats.gain || !_beats.ctx) return;
+  const target = await _circadianVolumeNow();
   try { _beats.gain.gain.setTargetAtTime(target, _beats.ctx.currentTime, 1.0); } catch (_) {}
 }
 
 async function startCircadian() {
   stopCircadian();
   _beats.circadian = true;
+  // Override beats-page volume so initial ramp uses the schedule, not the slider.
+  const savedSliderVol = _beats.volume;
+  _beats.volume = await _circadianVolumeNow();
   const wave = await waveForNow();
   if (_beats.active) transitionToWave(wave); else startBeats(wave);
+  // Restore slider value (so when user stops circadian, the slider is unchanged for manual play).
+  _beats.volume = savedSliderVol;
   await applyCircadianVolume();
-  // Re-check every 30 seconds for state + volume curve
   _circadianTimer = setInterval(async () => {
     const next = await waveForNow();
-    if (next !== _beats.active) transitionToWave(next);
+    if (next !== _beats.active) {
+      const sv = _beats.volume;
+      _beats.volume = await _circadianVolumeNow();
+      transitionToWave(next);
+      _beats.volume = sv;
+    }
     await applyCircadianVolume();
   }, 30 * 1000);
 }
@@ -285,6 +354,7 @@ function startBeats(waveId) {
 
   _beats.oscL = oscL; _beats.oscR = oscR; _beats.gain = gain;
   _beats.active = waveId;
+  _scheduleEarSwap();
 
   // Optional carrier pulsation — slow, subtle, preserves the beat exactly.
   if (wave.pulsate) {
@@ -388,7 +458,7 @@ async function renderBeatsView(container) {
     <div class="beat-name">Circadian</div>
     <div class="beat-range">Auto</div>
     <div class="beat-use">Plays the right state for the time of day</div>
-    <div class="beat-note">Theta → Delta → Theta → Alpha → Beta → Gamma → Alpha → Theta</div>
+    <div class="beat-note">Delta → Theta → Alpha → Beta → Gamma</div>
   `;
   circBtn.addEventListener('click', async () => {
     if (_beats.circadian) {
@@ -478,7 +548,9 @@ async function renderBeatsView(container) {
   volIn.addEventListener('input', () => {
     _beats.volume = parseInt(volIn.value, 10) / 100;
     volVal.textContent = Math.round(_beats.volume * 100) + '%';
-    if (_beats.gain && _beats.ctx) {
+    // Do NOT touch active gain when circadian is running — circadian volume comes
+    // from the schedule in Settings only.
+    if (_beats.gain && _beats.ctx && !_beats.circadian) {
       _beats.gain.gain.setTargetAtTime(_beats.volume, _beats.ctx.currentTime, 0.1);
     }
     setSetting('beats', { volume: _beats.volume, durationSec: _beats.durationSec });

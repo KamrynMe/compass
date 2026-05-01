@@ -15,6 +15,8 @@ async function renderAnalyticsView(container) {
 
   const all = await getAllDays();
 
+  await renderTopDaysSection(container, 'Top 5 Days');
+
   // Top: Daily Score history
   const scoreCard = card('Daily Score — Last 30 Days');
   const scoreCanvas = document.createElement('div');
@@ -49,8 +51,9 @@ async function renderAnalyticsView(container) {
   container.appendChild(wxCard);
   renderWeatherInfluence(wxCard, all);
 
-  // E: Correlation Exploration — pick one, see ranked relationships
-  const expCard = card('Correlation Exploration');
+  // E: Relationships Ranking — pick one, see ranked relationships (with category filter)
+  const expCard = card('Relationships Ranking');
+  expCard.id = 'relationships-ranking';
   container.appendChild(expCard);
   renderCorrelationExploration(expCard, all);
 
@@ -364,7 +367,7 @@ function renderCorrelationExplorer(parent, all) {
   setTimeout(recompute, 0);
 }
 
-let _expState = { picked: null, lag: 0, search: '' };
+let _expState = { picked: null, lag: 0, search: '', filterGroup: 'all' };
 
 function renderCorrelationExploration(parent, all) {
   const catalog = buildVariableCatalog();
@@ -395,8 +398,27 @@ function renderCorrelationExploration(parent, all) {
   `;
   parent.appendChild(lagWrap);
 
+  // Category filter for the ranked list
+  const groups = Array.from(new Set(catalog.map((c) => c.group)));
+  const filterWrap = document.createElement('div');
+  filterWrap.className = 'lag-wrap';
+  filterWrap.style.marginTop = '10px';
+  filterWrap.innerHTML = `
+    <div class="lag-label">Filter ranking by category:</div>
+    <select class="input-text" id="exp-filter">
+      <option value="all" ${_expState.filterGroup === 'all' ? 'selected' : ''}>All categories</option>
+      ${groups.map((g) => `<option value="${g}" ${_expState.filterGroup === g ? 'selected' : ''}>${g}</option>`).join('')}
+    </select>
+  `;
+  parent.appendChild(filterWrap);
+  filterWrap.querySelector('#exp-filter').addEventListener('change', (e) => {
+    _expState.filterGroup = e.target.value;
+    recompute();
+  });
+
   const ranked = document.createElement('div');
   ranked.className = 'var-list';
+  ranked.id = 'rr-ranked';
   ranked.style.marginTop = '12px';
   parent.appendChild(ranked);
 
@@ -460,6 +482,7 @@ function renderCorrelationExploration(parent, all) {
     const rows = [];
     for (const other of catalog) {
       if (other.id === pick.id) continue;
+      if (_expState.filterGroup && _expState.filterGroup !== 'all' && other.group !== _expState.filterGroup) continue;
       const pairs = buildPairs(recent, [pick], [other], lag);
       if (pairs.length < 5) continue;
       const r = pearson(pairs.map((p) => p.x), pairs.map((p) => p.y));

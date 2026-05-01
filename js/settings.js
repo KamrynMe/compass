@@ -18,6 +18,8 @@ async function renderSettingsView(container) {
   `;
   container.appendChild(header);
 
+  await renderInboxCard(container);
+
   const loc = (await getSetting('location')) || { lat: '', lon: '', label: '' };
   const wakeT = (await getSetting('wakeTime')) || '05:00';
   const windT = (await getSetting('winddownTime')) || '19:00';
@@ -46,25 +48,7 @@ async function renderSettingsView(container) {
     });
   });
 
-  // Debug card
-  const debugOn = !!(await getSetting('debugMomentum'));
-  const cardD = document.createElement('div');
-  cardD.className = 'card';
-  cardD.innerHTML = `
-    <h3>Debug</h3>
-    <label class="setting-row" style="flex-direction:row;align-items:center;justify-content:space-between;">
-      <div>
-        <div class="setting-label">Show Momentum calculation</div>
-        <div class="setting-help">Adds a breakdown of how today's Momentum % is computed beneath the tile.</div>
-      </div>
-      <input type="checkbox" id="dbg-mom" ${debugOn ? 'checked' : ''} style="width:28px;height:28px;">
-    </label>
-  `;
-  container.appendChild(cardD);
-  cardD.querySelector('#dbg-mom').addEventListener('change', async (e) => {
-    await setSetting('debugMomentum', e.target.checked);
-    showToast(e.target.checked ? 'Debug on' : 'Debug off');
-  });
+  // (Debug moved to Advanced — appears later, after Storage)
 
   // Completion target — drives the "Unlocked By" projection on Today
   const targetSel = (await getSetting('completionTarget')) || '';
@@ -201,8 +185,8 @@ async function renderSettingsView(container) {
     <h3>Data</h3>
     <div class="setting-help" style="margin-bottom:8px;">${exportNote}</div>
     <div class="row-buttons">
-      <button class="btn-secondary" id="data-export">Export JSON</button>
-      <button class="btn-secondary" id="data-import">Import JSON</button>
+      <button class="btn-secondary" id="data-export">Save Data</button>
+      <button class="btn-secondary" id="data-import">Load Data</button>
     </div>
     <input type="file" id="data-import-file" accept="application/json" style="display:none">
     <div style="margin-top:14px;">
@@ -260,6 +244,7 @@ async function renderSettingsView(container) {
   cardF.querySelector('#snd-toggle').addEventListener('change', (e) => {
     setSoundsEnabled(e.target.checked);
     showToast(e.target.checked ? 'Sounds on' : 'Sounds off');
+    if (e.target.checked) playCheckSound();
   });
 
   await renderCircadianCard(container);
@@ -270,6 +255,8 @@ async function renderSettingsView(container) {
   cardS.innerHTML = `<h3>Storage</h3><div id="storage-info" class="muted" style="font-size:14px;">Reading…</div>`;
   container.appendChild(cardS);
   await renderStorageCard(cardS);
+
+  await renderAdvancedCard(container);
 
   const card4 = document.createElement('div');
   card4.className = 'card';
@@ -298,6 +285,112 @@ function _readHm(rowEl) {
   const h = parseInt(rowEl.querySelector('.hm-h').value, 10) || 0;
   const m = parseInt(rowEl.querySelector('.hm-m').value, 10) || 0;
   return h * 60 + m;
+}
+
+async function renderInboxCard(container) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  container.appendChild(card);
+  const seen = (await getSetting('inboxSeenIds')) || [];
+  const messages = await getInboxMessages();
+  const unread = messages.filter((m) => !seen.includes(m.id)).length;
+  card.innerHTML = `
+    <h3>Inbox ${unread > 0 ? `<span class="inbox-badge">${unread}</span>` : ''}</h3>
+    <div id="inbox-list">
+      ${messages.length === 0 ? '<div class="muted" style="font-size:14px;">Nothing new.</div>' : messages.map((m) => `
+        <div class="inbox-msg ${seen.includes(m.id) ? 'seen' : 'unread'}" data-id="${m.id}">
+          <div class="inbox-msg-head">
+            <strong>${escapeHtml(m.title)}</strong>
+            <span class="muted" style="font-size:12px;">${m.date}</span>
+          </div>
+          <div class="inbox-msg-body">${m.body}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  card.querySelectorAll('.inbox-msg').forEach((el) => {
+    el.addEventListener('click', async () => {
+      el.classList.remove('unread');
+      el.classList.add('seen');
+      const id = el.dataset.id;
+      const cur = (await getSetting('inboxSeenIds')) || [];
+      if (!cur.includes(id)) {
+        cur.push(id);
+        await setSetting('inboxSeenIds', cur);
+        updateSettingsBadge();
+      }
+    });
+  });
+}
+
+async function getInboxMessages() {
+  // Hardcoded message log; can be augmented by service-worker update events later.
+  return [
+    {
+      id: 'v21-2026-05-01',
+      title: 'Big update — Scheduler v21',
+      date: '2026-05-01',
+      body: `<div style="font-size:14px;line-height:1.55;">
+        <p><strong>Renamed</strong> from Compass Habits to Scheduler.</p>
+        <p><strong>New:</strong> all goals editable + removable in Settings, with reset-to-default. Per-goal picture (shown when goal is expanded). Top 5 Days panel on Calendar + Analytics. Days-of-week as correlation variables. Relationships Ranking now has a category filter.</p>
+        <p><strong>Calendar:</strong> swipe between months, tap month name to jump anywhere, past empty days are blank, future days are dark.</p>
+        <p><strong>Beats:</strong> L/R ear assignment slowly alternates (every 90 s) to keep the dissonance fresh.</p>
+        <p><strong>Today:</strong> "Best" added between "To Beat" and "Score". Projection compares today's pace vs. 7 days ago. Wake-up prompt on first run.</p>
+        <p><strong>Tabs:</strong> double-tap shortcuts — Today→top uncompleted goal, Calendar→jump to today, Beats→toggle Circadian, Settings→toggle theme, Analytics→Relationships Ranking with Daily Score.</p>
+        <p><strong>Backups:</strong> use Save Data (Settings → Data) regularly. iOS Safari does not allow PWAs to auto-write to Files.</p>
+      </div>`,
+    },
+  ];
+}
+
+function updateSettingsBadge() {
+  // Optional: add a badge to the tabbar Settings tab
+  const tab = document.querySelector('.tab[data-tab="settings"]');
+  if (!tab) return;
+  getSetting('inboxSeenIds').then(async (seenRaw) => {
+    const seen = seenRaw || [];
+    const messages = await getInboxMessages();
+    const unread = messages.filter((m) => !seen.includes(m.id)).length;
+    let badge = tab.querySelector('.tab-badge');
+    if (unread > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'tab-badge';
+        tab.appendChild(badge);
+      }
+      badge.textContent = unread;
+    } else if (badge) {
+      badge.remove();
+    }
+  });
+}
+
+async function renderAdvancedCard(container) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  container.appendChild(card);
+  const debugOn = !!(await getSetting('debugMomentum'));
+  card.innerHTML = `
+    <h3>Advanced</h3>
+    <label class="setting-row toggle-row">
+      <div>
+        <div class="setting-label">Show Momentum calculation</div>
+        <div class="setting-help">Adds a breakdown of how today's Momentum % is computed beneath the tile.</div>
+      </div>
+      <span class="toggle-switch ${debugOn ? 'on' : ''}" data-toggle="dbg-mom" role="switch" aria-checked="${debugOn}"></span>
+    </label>
+    <div class="setting-help" style="margin-top:14px;border-top:1px solid var(--rule);padding-top:12px;">
+      <strong>Auto-save to Files:</strong> iOS Safari (where this app lives as a PWA) doesn't expose the File System Access API, so we can't silently overwrite a backup file in your Files. The closest path is to tap <strong>Save Data</strong> in the Data card — Safari will route the JSON to your Downloads / Files. We'll prompt you again any time the data on disk gets old.
+    </div>
+  `;
+  card.querySelector('[data-toggle="dbg-mom"]').addEventListener('click', async (e) => {
+    const el = e.currentTarget;
+    const next = !el.classList.contains('on');
+    el.classList.toggle('on', next);
+    el.setAttribute('aria-checked', next);
+    await setSetting('debugMomentum', next);
+    showToast(next ? 'Debug on' : 'Debug off');
+  });
 }
 
 function _fmtBytes(b) {
