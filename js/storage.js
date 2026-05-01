@@ -101,6 +101,7 @@ async function saveDay(record, opts = {}) {
   } catch (_) {}
   const store = await tx('days', 'readwrite');
   await reqAsPromise(store.put(record));
+  try { if (typeof maybeAutoSync === 'function') maybeAutoSync(); } catch (_) {}
   return record;
 }
 
@@ -170,6 +171,7 @@ async function getSetting(key) {
 async function setSetting(key, value) {
   const store = await tx('settings', 'readwrite');
   await reqAsPromise(store.put({ key, value }));
+  try { if (typeof maybeAutoSync === 'function' && key !== 'lastSyncAt' && key !== 'deviceId' && key !== 'syncConfig') maybeAutoSync(); } catch (_) {}
 }
 
 async function getAllSettings() {

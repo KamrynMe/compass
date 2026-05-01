@@ -1,4 +1,4 @@
-const CACHE = 'compass-v21';
+const CACHE = 'compass-v22';
 const ASSETS = [
   './',
   './index.html',
@@ -13,6 +13,7 @@ const ASSETS = [
   './js/settings.js',
   './js/weather.js',
   './js/correlations.js',
+  './js/sync.js',
   './js/feedback.js',
   './js/beats.js',
   './icons/icon-192.png',
@@ -37,6 +38,10 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
+  // Always pass-through Supabase API calls (auth + REST + storage). No caching.
+  if (url.hostname.endsWith('.supabase.co') || url.hostname.endsWith('.supabase.in')) {
+    return; // Let the browser handle it natively.
+  }
   // Network-first for Open-Meteo
   if (url.hostname.includes('open-meteo.com')) {
     e.respondWith(

@@ -55,6 +55,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   try { await maybePromptWakeTime(); } catch (_) {}
   navigate();
   setupTabDoubleTap();
+  // Cloud sync — pull at boot, then auto-push on changes.
+  try { if (typeof syncBootstrap === 'function') syncBootstrap(); } catch (_) {}
+  // Allow Supabase REST in the SW network-first list (fetch passes through naturally — no extra setup needed).
 
   // Re-arm reminder if set
   try {

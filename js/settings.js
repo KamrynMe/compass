@@ -256,6 +256,7 @@ async function renderSettingsView(container) {
   container.appendChild(cardS);
   await renderStorageCard(cardS);
 
+  await renderSyncCard(container);
   await renderAdvancedCard(container);
 
   const card4 = document.createElement('div');
@@ -363,6 +364,41 @@ function updateSettingsBadge() {
       badge.remove();
     }
   });
+}
+
+async function renderSyncCard(container) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  container.appendChild(card);
+  async function paint() {
+    const cfg = await syncConfig();
+    const last = await getSetting('lastSyncAt');
+    const dev = await syncDeviceId();
+    card.innerHTML = `
+      <h3>Cloud Sync <span style="color:var(--e-border);font-weight:700;font-size:13px;">live</span></h3>
+      <div class="setting-help">Auto-syncs your full data to a private Supabase row keyed by this device. Pulls at app start, pushes a few seconds after each change.</div>
+      <div style="margin-top:10px;font-size:13px;line-height:1.6;">
+        <div><strong>Endpoint:</strong> ${escapeHtml(cfg.url)}</div>
+        <div><strong>Device:</strong> <span style="font-family:monospace;font-size:11px;">${escapeHtml(dev)}</span></div>
+        <div><strong>Last sync:</strong> ${last ? new Date(last).toLocaleString() : '—'}</div>
+      </div>
+      <div class="row-buttons" style="margin-top:10px;">
+        <button class="btn-secondary" id="sync-pull">Pull from cloud</button>
+        <button class="btn-primary" id="sync-push">Push now</button>
+      </div>
+    `;
+    card.querySelector('#sync-pull').addEventListener('click', async () => {
+      const r = await pullSyncNow();
+      showToast(r.ok ? 'Pulled ' + (r.days || 0) + ' day(s)' : 'Pull failed: ' + r.reason);
+      paint();
+    });
+    card.querySelector('#sync-push').addEventListener('click', async () => {
+      await pushSyncNow();
+      showToast('Pushed');
+      paint();
+    });
+  }
+  await paint();
 }
 
 async function renderAdvancedCard(container) {
