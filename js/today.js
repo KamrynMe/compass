@@ -676,17 +676,19 @@ async function projectUnlockTimes() {
     const currentPastAbs = past.currentDays - 7;
     const fastDiff = now.fastestDays - fastestPastAbs;
     const projDiff = now.currentDays - currentPastAbs;
-    const fmtDiff = (d) => {
-      if (!isFinite(d)) return '—';
-      const sign = d <= 0 ? 'shorter' : 'longer';
-      const abs = Math.abs(d);
-      return `${ymdShort(abs)} ${sign}`;
+    const fmtChange = (d) => {
+      if (!isFinite(d)) return 'No change since last week.';
+      const r = Math.round(d);
+      if (r === 0) return 'Same as last week.';
+      const days = Math.abs(r);
+      const dayWord = days === 1 ? 'day' : 'days';
+      return r < 0
+        ? `${days} ${dayWord} sooner than one week ago.`
+        : `${days} ${dayWord} later than one week ago.`;
     };
     compareHtml = `
-      <div class="proj-line"><span class="proj-label">Fastest 7d ago:</span> ${past.fastestDays > 0 ? addDaysFmt(past.fastestDays - 7) : 'Done'}</div>
-      <div class="proj-line"><span class="proj-label">Δ:</span> ${fmtDiff(fastDiff)}</div>
-      <div class="proj-line"><span class="proj-label">Unlocked by 7d ago:</span> ${past.currentDays > 0 ? addDaysFmt(past.currentDays - 7) : 'Done'}</div>
-      <div class="proj-line"><span class="proj-label">Δ:</span> ${fmtDiff(projDiff)}</div>
+      <div class="proj-line"><span class="proj-label">Fastest pace:</span> ${fmtChange(fastDiff)}</div>
+      <div class="proj-line"><span class="proj-label">Your pace:</span> ${fmtChange(projDiff)}</div>
     `;
   } catch (_) {}
   return {

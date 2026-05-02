@@ -26,8 +26,6 @@ async function renderCalendarView(container) {
   }
   container.innerHTML = '';
 
-  await renderTopDaysSection(container, 'Top 5 Days');
-
   const header = document.createElement('div');
   header.className = 'view-header';
   header.innerHTML = `
@@ -354,7 +352,7 @@ async function renderTopDaysSection(container, title) {
       const date = new Date(d.date + 'T12:00:00');
       const formatted = date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
       const isToday = d.date === today;
-      return `<div class="top-day-row${isToday ? ' is-today' : ''}">${i + 1}. ${formatted}: ${d.score.toLocaleString()} pts</div>`;
+      return `<div class="top-day-row${isToday ? ' is-today' : ''}">${i + 1}. ${formatted} - ${d.score.toLocaleString()} pts</div>`;
     }).join('');
   } catch (_) {
     card.querySelector('#top-days-body').innerHTML = '<div class="empty-state">Could not compute.</div>';

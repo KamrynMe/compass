@@ -256,7 +256,6 @@ async function renderSettingsView(container) {
   container.appendChild(cardS);
   await renderStorageCard(cardS);
 
-  await renderSyncCard(container);
   await renderAdvancedCard(container);
 
   const card4 = document.createElement('div');
@@ -290,34 +289,75 @@ function _readHm(rowEl) {
 
 async function renderInboxCard(container) {
   const card = document.createElement('div');
-  card.className = 'card';
+  card.className = 'card inbox-card';
   container.appendChild(card);
+  async function paint() {
+    const seen = (await getSetting('inboxSeenIds')) || [];
+    const messages = await getInboxMessages();
+    const unread = messages.filter((m) => !seen.includes(m.id)).length;
+    card.innerHTML = `
+      <button class="inbox-summary" id="inbox-open">
+        <span class="inbox-summary-label">📬 Inbox</span>
+        <span class="inbox-summary-meta">
+          ${messages.length} message${messages.length === 1 ? '' : 's'}
+          ${unread > 0 ? `<span class="inbox-badge">${unread} new</span>` : ''}
+        </span>
+        <span class="inbox-summary-arrow">›</span>
+      </button>
+    `;
+    card.querySelector('#inbox-open').addEventListener('click', () => openInboxModal(paint));
+  }
+  await paint();
+}
+
+async function openInboxModal(onClose) {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = '';
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  overlay.appendChild(modal);
+  root.appendChild(overlay);
+  const head = document.createElement('div');
+  head.className = 'modal-head';
+  head.innerHTML = `
+    <button class="modal-back" id="ib-close" aria-label="Back">←</button>
+    <div class="modal-date">Inbox</div>
+    <span style="width:44px;"></span>
+  `;
+  modal.appendChild(head);
+  const list = document.createElement('div');
+  modal.appendChild(list);
+  head.querySelector('#ib-close').addEventListener('click', async () => {
+    root.innerHTML = '';
+    if (onClose) await onClose();
+  });
   const seen = (await getSetting('inboxSeenIds')) || [];
   const messages = await getInboxMessages();
-  const unread = messages.filter((m) => !seen.includes(m.id)).length;
-  card.innerHTML = `
-    <h3>Inbox ${unread > 0 ? `<span class="inbox-badge">${unread}</span>` : ''}</h3>
-    <div id="inbox-list">
-      ${messages.length === 0 ? '<div class="muted" style="font-size:14px;">Nothing new.</div>' : messages.map((m) => `
-        <div class="inbox-msg ${seen.includes(m.id) ? 'seen' : 'unread'}" data-id="${m.id}">
-          <div class="inbox-msg-head">
-            <strong>${escapeHtml(m.title)}</strong>
-            <span class="muted" style="font-size:12px;">${m.date}</span>
-          </div>
-          <div class="inbox-msg-body">${m.body}</div>
-        </div>
-      `).join('')}
-    </div>
-  `;
-  card.querySelectorAll('.inbox-msg').forEach((el) => {
-    el.addEventListener('click', async () => {
-      el.classList.remove('unread');
-      el.classList.add('seen');
-      const id = el.dataset.id;
+  if (!messages.length) {
+    list.innerHTML = '<div class="empty-state">Nothing here yet.</div>';
+    return;
+  }
+  list.innerHTML = messages.map((m) => `
+    <details class="inbox-row ${seen.includes(m.id) ? 'seen' : 'unread'}" data-id="${m.id}">
+      <summary class="inbox-row-head">
+        <span class="inbox-row-title">${escapeHtml(m.title)}</span>
+        <span class="inbox-row-date">${m.date}</span>
+      </summary>
+      <div class="inbox-row-body">${m.body}</div>
+    </details>
+  `).join('');
+  list.querySelectorAll('.inbox-row').forEach((row) => {
+    row.addEventListener('toggle', async () => {
+      if (!row.open) return;
+      const id = row.dataset.id;
       const cur = (await getSetting('inboxSeenIds')) || [];
       if (!cur.includes(id)) {
         cur.push(id);
         await setSetting('inboxSeenIds', cur);
+        row.classList.remove('unread');
+        row.classList.add('seen');
         updateSettingsBadge();
       }
     });
@@ -405,27 +445,99 @@ async function renderAdvancedCard(container) {
   const card = document.createElement('div');
   card.className = 'card';
   container.appendChild(card);
-  const debugOn = !!(await getSetting('debugMomentum'));
-  card.innerHTML = `
-    <h3>Advanced</h3>
-    <label class="setting-row toggle-row">
-      <div>
-        <div class="setting-label">Show Momentum calculation</div>
-        <div class="setting-help">Adds a breakdown of how today's Momentum % is computed beneath the tile.</div>
+  async function paint() {
+    const debugOn = !!(await getSetting('debugMomentum'));
+    const isAdmin = await adminIsLoggedIn();
+    const last = isAdmin ? await getSetting('lastSyncAt') : null;
+    card.innerHTML = `
+      <h3>Advanced</h3>
+      <label class="setting-row toggle-row">
+        <div>
+          <div class="setting-label">Show Momentum calculation</div>
+          <div class="setting-help">Adds a breakdown of how today's Momentum % is computed beneath the tile.</div>
+        </div>
+        <span class="toggle-switch ${debugOn ? 'on' : ''}" data-toggle="dbg-mom" role="switch" aria-checked="${debugOn}"></span>
+      </label>
+      <div style="margin-top:14px;border-top:1px solid var(--rule);padding-top:12px;">
+        <div class="setting-label">Admin login</div>
+        <div class="setting-help">${isAdmin ? 'Cloud sync is active.' : 'Local-only mode. Admin login enables cloud sync.'}${last ? ' Last sync: ' + new Date(last).toLocaleString() + '.' : ''}</div>
+        <div class="row-buttons" style="margin-top:8px;">
+          ${isAdmin
+            ? '<button class="btn-secondary" id="adm-pull">Pull from cloud</button><button class="btn-secondary" id="adm-push">Push now</button><button class="btn-danger" id="adm-out">Log out</button>'
+            : '<button class="btn-primary" id="adm-in">Log in</button>'}
+        </div>
       </div>
-      <span class="toggle-switch ${debugOn ? 'on' : ''}" data-toggle="dbg-mom" role="switch" aria-checked="${debugOn}"></span>
-    </label>
-    <div class="setting-help" style="margin-top:14px;border-top:1px solid var(--rule);padding-top:12px;">
-      <strong>Auto-save to Files:</strong> iOS Safari (where this app lives as a PWA) doesn't expose the File System Access API, so we can't silently overwrite a backup file in your Files. The closest path is to tap <strong>Save Data</strong> in the Data card — Safari will route the JSON to your Downloads / Files. We'll prompt you again any time the data on disk gets old.
+    `;
+    card.querySelector('[data-toggle="dbg-mom"]').addEventListener('click', async (e) => {
+      const el = e.currentTarget;
+      const next = !el.classList.contains('on');
+      el.classList.toggle('on', next);
+      el.setAttribute('aria-checked', next);
+      await setSetting('debugMomentum', next);
+      showToast(next ? 'Debug on' : 'Debug off');
+    });
+    if (isAdmin) {
+      card.querySelector('#adm-pull').addEventListener('click', async () => {
+        const r = await pullSyncNow();
+        showToast(r.ok ? 'Pulled ' + (r.days || 0) + ' day(s)' : 'Pull failed');
+        paint();
+      });
+      card.querySelector('#adm-push').addEventListener('click', async () => {
+        await pushSyncNow();
+        showToast('Pushed');
+        paint();
+      });
+      card.querySelector('#adm-out').addEventListener('click', async () => {
+        await adminLogOut();
+        showToast('Logged out');
+        paint();
+      });
+    } else {
+      card.querySelector('#adm-in').addEventListener('click', () => openAdminLoginModal(paint));
+    }
+  }
+  await paint();
+}
+
+function openAdminLoginModal(onDone) {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = '';
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:340px;height:auto;align-self:center;border-radius:14px;">
+      <h3 style="margin-bottom:8px;">Admin login</h3>
+      <div class="setting-row">
+        <div class="setting-label">Username</div>
+        <input class="input-text" id="adm-user" autocapitalize="none" autocomplete="off">
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">Password</div>
+        <input class="input-text" id="adm-pass" type="password">
+      </div>
+      <div class="row-buttons" style="margin-top:12px;">
+        <button class="btn-secondary" id="adm-cancel">Cancel</button>
+        <button class="btn-primary" id="adm-ok">Log in</button>
+      </div>
     </div>
   `;
-  card.querySelector('[data-toggle="dbg-mom"]').addEventListener('click', async (e) => {
-    const el = e.currentTarget;
-    const next = !el.classList.contains('on');
-    el.classList.toggle('on', next);
-    el.setAttribute('aria-checked', next);
-    await setSetting('debugMomentum', next);
-    showToast(next ? 'Debug on' : 'Debug off');
+  root.appendChild(overlay);
+  const close = () => { root.innerHTML = ''; };
+  overlay.querySelector('#adm-cancel').addEventListener('click', close);
+  overlay.querySelector('#adm-ok').addEventListener('click', async () => {
+    const u = overlay.querySelector('#adm-user').value.trim();
+    const p = overlay.querySelector('#adm-pass').value;
+    const ok = await adminLogIn(u, p);
+    if (ok) {
+      close();
+      showToast('Cloud sync enabled');
+      try { syncBootstrap && syncBootstrap(); } catch (_) {}
+      if (onDone) onDone();
+    } else {
+      showToast('Invalid credentials');
+    }
   });
 }
 
@@ -787,11 +899,11 @@ async function renderCustomGoalsCard(container) {
         `).join('');
 
     card.innerHTML = `
-      <h3>Custom Goals</h3>
-      <div class="setting-help">Add your own goals anywhere in the habit stack. The original 26 cannot be removed.</div>
+      <h3>Goals</h3>
+      <div class="setting-help">All goals are editable. Reset wipes any custom edits and restores the original 26.</div>
       <div id="custom-list" style="margin:10px 0;display:flex;flex-direction:column;gap:8px;"></div>
       <details ${editing ? 'open' : ''} id="custom-form-wrap">
-        <summary style="cursor:pointer;font-weight:600;font-size:15px;padding:8px 0;">${editing ? '✏️ Edit goal' : '＋ Add a new goal'}</summary>
+        <summary class="goals-add-btn">${editing ? '✏️ Edit goal' : '＋ Add new goal'}</summary>
         <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
           <label class="setting-label" style="font-size:13px;">Emoji
             <input class="input-text" id="cg-emoji" maxlength="4" value="${escapeHtml(editing?.emoji || '🎯')}">
@@ -821,7 +933,18 @@ async function renderCustomGoalsCard(container) {
           </div>
         </div>
       </details>
+      <div class="row-buttons" style="margin-top:10px;">
+        <button class="btn-danger" id="goals-reset" style="flex:1;">Reset to defaults</button>
+      </div>
     `;
+
+    card.querySelector('#goals-reset').addEventListener('click', async () => {
+      if (!confirm('Reset all goals to the original 26? Custom goals will be removed (their saved history stays in the database).')) return;
+      await resetGoalsToDefault();
+      editingId = null;
+      showToast('Reset to default goals');
+      refresh();
+    });
 
     card.querySelector('#custom-list').innerHTML = listHtml;
     if (editing) {

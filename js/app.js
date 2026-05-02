@@ -195,6 +195,11 @@ async function handleTabDoubleTap(id) {
       await startCircadian();
       showToast('Circadian started');
     }
+    // Sync visual state of any rendered beats grid.
+    document.querySelectorAll('.beat-btn').forEach((b) => {
+      const isCirc = b.dataset.wave === '__circadian';
+      b.classList.toggle('active', isCirc ? !!(typeof _beats !== 'undefined' && _beats.circadian) : (b.dataset.wave === (typeof _beats !== 'undefined' ? _beats.active : null)));
+    });
   } else if (id === 'settings') {
     const cur = (await getSetting('themeMode')) || 'system';
     let next;
@@ -206,11 +211,14 @@ async function handleTabDoubleTap(id) {
     showToast('Theme: ' + next);
   } else if (id === 'analytics') {
     if (location.hash !== '#analytics') { location.hash = '#analytics'; await new Promise((r) => setTimeout(r, 100)); }
-    // Pick "Daily Score (points)" in the Relationships Ranking and scroll to it
+    // Toggle: top of page ↔ Relationships Ranking with Daily Score selected.
     const card = document.getElementById('relationships-ranking');
-    if (card) {
-      const buttons = card.querySelectorAll('.var-list .var-btn');
-      // Find the row whose name matches Daily Score
+    if (!card) return;
+    const cardTop = card.getBoundingClientRect().top;
+    const atRR = cardTop > -50 && cardTop < 200;
+    if (atRR) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
       const items = card.querySelectorAll('.var-list .var-item');
       for (const it of items) {
         if (/Daily Score/i.test(it.textContent)) {

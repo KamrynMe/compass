@@ -20,18 +20,33 @@ let _syncTimer = null;
 let _syncing = false;
 let _lastPullAt = 0;
 
-// Pre-configured project — auto-sync works the moment the app loads.
-const SYNC_DEFAULT_URL = 'https://llvqfneoelymvkigltqa.supabase.co';
-const SYNC_DEFAULT_KEY = 'sb_publishable_klbrY4121TC85eO-jJUwvg_ecZAXqgW';
+// Cloud sync is gated behind admin login. Default install = LOCAL ONLY.
+const SYNC_PROJECT_URL = 'https://llvqfneoelymvkigltqa.supabase.co';
+const SYNC_PROJECT_KEY = 'sb_publishable_klbrY4121TC85eO-jJUwvg_ecZAXqgW';
+const ADMIN_USER = 'KamrynMe';
+const ADMIN_PASS = 'Wordpass1';
 
 async function syncConfig() {
   const stored = await getSetting('syncConfig');
-  if (stored && stored.url && stored.anonKey) return stored;
-  // Default — write once so the user can later edit/disable in Settings.
-  const def = { url: SYNC_DEFAULT_URL, anonKey: SYNC_DEFAULT_KEY, autoSync: true };
-  await setSetting('syncConfig', def);
-  return def;
+  if (stored && stored.url && stored.anonKey && stored.enabled) return stored;
+  return null;
 }
+
+async function adminLogIn(user, pass) {
+  if (user !== ADMIN_USER || pass !== ADMIN_PASS) return false;
+  await setSetting('syncConfig', { url: SYNC_PROJECT_URL, anonKey: SYNC_PROJECT_KEY, enabled: true });
+  return true;
+}
+
+async function adminLogOut() {
+  await setSetting('syncConfig', null);
+}
+
+async function adminIsLoggedIn() {
+  const c = await getSetting('syncConfig');
+  return !!(c && c.enabled);
+}
+
 async function setSyncConfig(c) { await setSetting('syncConfig', c); }
 async function syncDeviceId() {
   let id = await getSetting('deviceId');

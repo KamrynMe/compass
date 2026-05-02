@@ -16,6 +16,9 @@ async function renderAnalyticsView(container) {
   const all = await getAllDays();
 
   await renderTopDaysSection(container, 'Top 5 Days');
+  // Tag the card we just created so the leaderboard styling kicks in.
+  const lastCard = container.querySelector('.card:last-child');
+  if (lastCard) lastCard.classList.add('leaderboard');
 
   // Top: Daily Score history
   const scoreCard = card('Daily Score — Last 30 Days');
@@ -489,7 +492,8 @@ function renderCorrelationExploration(parent, all) {
       if (r == null) continue;
       rows.push({ name: other.name, group: other.group, r, n: pairs.length });
     }
-    rows.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+    // Sort by signed r descending — strongest positive correlations first.
+    rows.sort((a, b) => b.r - a.r);
     if (!rows.length) { ranked.innerHTML = '<div class="empty-state">No variable pairs had enough data.</div>'; return; }
     ranked.innerHTML = rows.map((row) => {
       const pct = Math.round(row.r * 100);
