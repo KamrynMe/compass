@@ -44,7 +44,7 @@ function blankDay(date) {
     date,
     createdAt: null,
     lastEditedAt: null,
-    sliders: { circumstances: 0, mood: 0, productivity: 0 },
+    sliders: { circumstances: 0, mood: 0, productivity: 0, strength: 0 },
     weather: null,
     questions: emptyQuestions(),
     intentions: '',
@@ -165,7 +165,10 @@ async function wipeAll() {
 async function getSetting(key) {
   const store = await tx('settings', 'readonly');
   const r = await reqAsPromise(store.get(key));
-  return r ? r.value : null;
+  if (r) return r.value;
+  // Settings defaults
+  if (key === 'debugMomentum') return true;
+  return null;
 }
 
 async function setSetting(key, value) {

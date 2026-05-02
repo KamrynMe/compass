@@ -1,12 +1,7 @@
 // Variable catalog for correlation explorer
 function buildVariableCatalog() {
   const vars = [];
-  // Sliders
-  for (const s of SLIDERS) {
-    vars.push({ id: 'slider:' + s.id, name: s.label, group: 'Sliders',
-      get: (r) => r.sliders ? r.sliders[s.id] : null });
-  }
-  // Daily score (raw points, 100 × value-fraction per habit)
+  // Score group is FIRST per UX request — most important variable.
   vars.push({ id: 'score:daily', name: 'Daily Score (points)', group: 'Score',
     get: (r) => {
       let total = 0;
@@ -18,6 +13,11 @@ function buildVariableCatalog() {
       }
       return total;
     } });
+  // Sliders
+  for (const s of SLIDERS) {
+    vars.push({ id: 'slider:' + s.id, name: s.label, group: 'Sliders',
+      get: (r) => r.sliders ? r.sliders[s.id] : null });
+  }
   // Pillar percentages + overall
   vars.push({ id: 'pct:overall', name: 'Overall Completion %', group: 'Completion',
     get: (r) => overallCompletion(r) });

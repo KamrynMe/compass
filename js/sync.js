@@ -159,6 +159,17 @@ function maybeAutoSync() {
   syncEnabled().then((on) => { if (on) schedulePush(); });
 }
 
+// Daily backup — call this from any natural daily event (e.g. weather load).
+async function maybeDailyBackup() {
+  if (!(await syncEnabled())) return;
+  const last = await getSetting('lastSyncAt');
+  if (last) {
+    const ageH = (Date.now() - new Date(last).getTime()) / 36e5;
+    if (ageH < 24) return;
+  }
+  await pushSyncNow();
+}
+
 // On app boot, pull once if config is set, then push pending state.
 async function syncBootstrap() {
   if (!(await syncEnabled())) return;

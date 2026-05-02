@@ -45,11 +45,22 @@ async function renderDayEditor(record, opts = {}) {
       `;
     }
   }
-  // Find next incomplete unlocked goal
-  const nextGoal = QUESTIONS.find((q) => unlocked.has(q.id) && (record.questions[q.id]?.value ?? 0) === 0);
-  const nextHtml = nextGoal
-    ? `<div class="mom-upnext"><span class="mom-upnext-label">Up Next:</span> <span class="mom-upnext-text">${nextGoal.displayNum}. ${escapeHtml((nextGoal.emoji || '') + ' ' + nextGoal.text).slice(0, 60)}</span></div>`
-    : `<div class="mom-upnext muted"><span class="mom-upnext-label">Up Next:</span> All unlocked goals worked on today</div>`;
+  // Find next incomplete unlocked goal — first goal in QUESTIONS order
+  // (which already includes customs in their inserted positions) with value === 0.
+  function _nextGoal(uSet) {
+    for (const q of QUESTIONS) {
+      if (!uSet.has(q.id)) continue;
+      const v = record.questions[q.id]?.value ?? 0;
+      if (v === 0) return q;
+    }
+    return null;
+  }
+  function _upNextHtml(g) {
+    if (!g) return `<div class="mom-upnext muted"><span class="mom-upnext-label">Up Next:</span> <span class="mom-upnext-text">All unlocked goals worked on today</span></div>`;
+    return `<div class="mom-upnext"><span class="mom-upnext-label">Up Next:</span> <span class="mom-upnext-text">${g.displayNum}. ${escapeHtml((g.emoji || '') + ' ' + g.text).slice(0, 70)}</span></div>`;
+  }
+  const nextGoal = _nextGoal(unlocked);
+  const nextHtml = _upNextHtml(nextGoal);
   momCard.innerHTML = `
     <div class="mom-value-wrap"><span class="mom-value" style="color:${momCol};">${momentum == null ? '—' : momentum + '<span class="mom-pct">%</span>'}</span></div>
     <div class="mom-label-wrap"><span class="mom-label">Momentum</span></div>
@@ -199,6 +210,8 @@ async function renderDayEditor(record, opts = {}) {
       onChange(record);
       renderWeather();
       if (showMsg) showToast('Weather updated');
+      // Daily cloud backup hook for admin sessions.
+      try { if (typeof maybeDailyBackup === 'function') maybeDailyBackup(); } catch (_) {}
     } catch (e) {
       if (showMsg) showToast(e.message || 'Weather fetch failed');
     }
@@ -415,9 +428,17 @@ async function renderDayEditor(record, opts = {}) {
     }
   }
 
+  function _refreshUpNext(uSet) {
+    const wrapEl = momCard.querySelector('.mom-upnext');
+    if (!wrapEl) return;
+    const next = _nextGoal(uSet || unlocked);
+    wrapEl.outerHTML = _upNextHtml(next);
+  }
+
   async function refreshStreaksAndUnlocks() {
     const c2 = await recentCheckCounts(record.date);
     const u2 = await computeUnlockedSet(record.date, c2);
+    _refreshUpNext(u2);
     for (const q of QUESTIONS) {
       const row = wrap.querySelector(`.q[data-qid="${q.id}"]`);
       if (!row) continue;

@@ -2,6 +2,7 @@ const ROUTES = {
   today: renderTodayView,
   calendar: renderCalendarView,
   analytics: renderAnalyticsView,
+  achievements: renderAchievementsView,
   beats: renderBeatsView,
   settings: renderSettingsView,
 };

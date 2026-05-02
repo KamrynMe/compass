@@ -223,9 +223,10 @@ button { cursor: pointer; touch-action: manipulation; }
   box-shadow: 0 1px 4px rgba(0,0,0,0.2);
 }
 
-.slider-row.circumstances { --c: #4a7ab0; } /* blue per request */
+.slider-row.circumstances { --c: #4a7ab0; }
 .slider-row.mood { --c: var(--slider-mood); }
 .slider-row.productivity { --c: var(--slider-prod); }
+.slider-row.strength { --c: #c0394a; }
 
 /* Weather card */
 .weather-grid {
@@ -955,6 +956,36 @@ input[type="time"].input-text { font-family: inherit; }
   text-align: center;
 }
 .tab { position: relative; }
+
+/* Streak card */
+.streak-card {
+  text-align: center;
+  padding: 14px 12px;
+  background: linear-gradient(135deg, #2a1818 0%, var(--surface) 100%);
+  border-color: #c05050;
+}
+.streak-card.hot { box-shadow: 0 0 0 2px #ff7e2a, 0 0 18px rgba(255,126,42,0.45); }
+.streak-flame { font-size: 28px; line-height: 1; }
+.streak-value { font-size: 36px; font-weight: 800; line-height: 1; margin-top: 4px; color: #ff8a3a; }
+.streak-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink3); margin-top: 2px; }
+.streak-bonus { font-size: 12px; margin-top: 6px; }
+
+/* Achievement / month badges */
+.badge-pill {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.month-award h3 { font-size: 16px; }
+.month-badge-row {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
 
 /* Leaderboard styling — Top 5 days, prominent */
 .card.leaderboard {

@@ -1,4 +1,4 @@
-const CACHE = 'compass-v23';
+const CACHE = 'compass-v24';
 const ASSETS = [
   './',
   './index.html',
@@ -10,6 +10,7 @@ const ASSETS = [
   './js/today.js',
   './js/calendar.js',
   './js/analytics.js',
+  './js/achievements.js',
   './js/settings.js',
   './js/weather.js',
   './js/correlations.js',

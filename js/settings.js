@@ -463,7 +463,7 @@ async function renderAdvancedCard(container) {
         <div class="setting-help">${isAdmin ? 'Cloud sync is active.' : 'Local-only mode. Admin login enables cloud sync.'}${last ? ' Last sync: ' + new Date(last).toLocaleString() + '.' : ''}</div>
         <div class="row-buttons" style="margin-top:8px;">
           ${isAdmin
-            ? '<button class="btn-secondary" id="adm-pull">Pull from cloud</button><button class="btn-secondary" id="adm-push">Push now</button><button class="btn-danger" id="adm-out">Log out</button>'
+            ? '<button class="btn-secondary" id="adm-pull">Refresh</button><button class="btn-secondary" id="adm-push">Backup</button><button class="btn-danger" id="adm-out">Log out</button>'
             : '<button class="btn-primary" id="adm-in">Log in</button>'}
         </div>
       </div>
@@ -914,18 +914,14 @@ async function renderCustomGoalsCard(container) {
           <label class="setting-label" style="font-size:13px;">Note (optional)
             <input class="input-text" id="cg-note" placeholder="A short hint or reminder" value="${escapeHtml(editing?.note || '')}">
           </label>
-          <label class="setting-label" style="font-size:13px;">Pillar
-            <select class="input-text" id="cg-pillar">${pillarOptions}</select>
+          <label class="setting-label" style="font-size:13px;">Category
+            <select class="input-text" id="cg-pillar">${pillarOptions}<option value="__new__">＋ New category…</option></select>
           </label>
           <label class="setting-label" style="font-size:13px;">Insert after
             <select class="input-text" id="cg-after">${buildAfterOptionsHtml(editing?.pillar || 'enjoyment')}</select>
           </label>
           <label class="setting-label" style="font-size:13px;">Start date
             <input class="input-text" type="date" id="cg-start" value="${escapeHtml(editing?.startDate || todayISO())}">
-          </label>
-          <label class="setting-label" style="font-size:13px;display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="cg-anchor" ${editing?.anchor ? 'checked' : ''} style="width:24px;height:24px;">
-            Anchor (gold border + ★)
           </label>
           <div class="row-buttons" style="margin-top:6px;">
             ${editing ? '<button class="btn-secondary" id="cg-cancel">Cancel</button>' : ''}
@@ -954,7 +950,22 @@ async function renderCustomGoalsCard(container) {
       card.querySelector('#cg-pillar').value = 'enjoyment';
     }
     // Re-filter "insert after" when pillar changes.
-    card.querySelector('#cg-pillar').addEventListener('change', (e) => {
+    card.querySelector('#cg-pillar').addEventListener('change', async (e) => {
+      if (e.target.value === '__new__') {
+        const name = prompt('New category name:');
+        if (!name || !name.trim()) { e.target.value = 'enjoyment'; return; }
+        const emoji = (prompt('Category emoji (one character):') || '🎯').trim();
+        const id = 'cat_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+        const customs = await loadCustomPillars();
+        customs.push({ id, name: name.trim(), symbol: emoji });
+        await saveCustomPillars(customs);
+        await initQuestions();
+        showToast('Category added');
+        // Re-render the whole goals card to pick up new pillar in dropdown.
+        editingId = null;
+        await refresh();
+        return;
+      }
       card.querySelector('#cg-after').innerHTML = buildAfterOptionsHtml(e.target.value);
     });
 
@@ -983,16 +994,15 @@ async function renderCustomGoalsCard(container) {
       const note = card.querySelector('#cg-note').value.trim();
       const pillar = card.querySelector('#cg-pillar').value;
       const afterId = card.querySelector('#cg-after').value;
-      const anchor = card.querySelector('#cg-anchor').checked;
       const startDate = card.querySelector('#cg-start').value || todayISO();
       if (!text) { showToast('Goal text required'); return; }
       const list = await loadCustomGoals();
       if (editing) {
         const idx = list.findIndex((c) => c.id === editing.id);
-        if (idx >= 0) list[idx] = { ...list[idx], emoji, text, note, pillar, afterId, anchor, startDate };
+        if (idx >= 0) list[idx] = { ...list[idx], emoji, text, note, pillar, afterId, startDate };
       } else {
         const id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-        list.push({ id, emoji, text, note, pillar, afterId, anchor, startDate });
+        list.push({ id, emoji, text, note, pillar, afterId, startDate });
       }
       await saveCustomGoals(list);
       rebuildQuestionsFrom(list);

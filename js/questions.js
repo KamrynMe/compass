@@ -125,6 +125,11 @@ function rebuildQuestionsFrom(list) {
 }
 
 async function initQuestions() {
+  // Merge custom pillars
+  const customs = await loadCustomPillars();
+  PILLARS.length = 0;
+  for (const p of PILLARS_BUILTIN) PILLARS.push(p);
+  for (const p of customs) PILLARS.push({ ...p, custom: true });
   const list = await loadUserGoals();
   rebuildQuestionsFrom(list);
 }
@@ -156,8 +161,20 @@ function msUntilNextScoreTick(wakeStr, windStr, dateISO) {
   return Math.max(500, Math.round(next));
 }
 
-// Pillar order matches the habit-stack order above.
-const PILLARS = [
+// Custom categories. User-defined categories can be added; prerequisite stays.
+async function loadCustomPillars() {
+  return (await getSetting('customPillars')) || [];
+}
+async function saveCustomPillars(list) {
+  await setSetting('customPillars', list);
+}
+async function getEffectivePillars() {
+  const customs = await loadCustomPillars();
+  return [...PILLARS_BUILTIN, ...customs];
+}
+
+// Built-ins (the original 6).
+const PILLARS_BUILTIN = [
   { id: 'prerequisite', name: 'Prerequisite', symbol: '🛏️' },
   { id: 'spiritual',    name: 'Spiritual',    symbol: '✦' },
   { id: 'health',       name: 'Health',       symbol: '◈' },
@@ -165,6 +182,8 @@ const PILLARS = [
   { id: 'financial',    name: 'Financial',    symbol: '◇' },
   { id: 'enjoyment',    name: 'Enjoyment',    symbol: '◉' },
 ];
+// PILLARS reflects built-ins + customs at runtime; populated by initQuestions().
+const PILLARS = [...PILLARS_BUILTIN];
 
 function questionsByPillar(pillarId) {
   return QUESTIONS.filter((q) => q.pillar === pillarId);
@@ -174,6 +193,7 @@ const SLIDERS = [
   { id: 'circumstances', label: 'Circumstances', cls: 'circumstances' },
   { id: 'mood',          label: 'Mood',          cls: 'mood' },
   { id: 'productivity',  label: 'Productivity',  cls: 'productivity' },
+  { id: 'strength',      label: 'Strength',      cls: 'strength' },
 ];
 
 // --- Habit unlock chain ---

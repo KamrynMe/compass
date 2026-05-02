@@ -37,6 +37,20 @@ async function renderCalendarView(container) {
   `;
   container.appendChild(header);
 
+  // Streak banner
+  try {
+    const streak = await computeStreak();
+    const streakCard = document.createElement('div');
+    streakCard.className = 'card streak-card' + (streak >= 7 ? ' hot' : '');
+    streakCard.innerHTML = `
+      <div class="streak-flame">🔥</div>
+      <div class="streak-value">${streak}</div>
+      <div class="streak-label">${streak === 1 ? 'day streak' : 'day streak'}</div>
+      ${streak > 0 ? `<div class="streak-bonus muted">+${Math.min(500, streak * 10)} pts/day base streak bonus</div>` : '<div class="streak-bonus muted">Log any habit during your waking window to start a streak.</div>'}
+    `;
+    container.appendChild(streakCard);
+  } catch (_) {}
+
   const controls = document.createElement('div');
   controls.className = 'cal-controls';
   controls.innerHTML = `
@@ -67,6 +81,21 @@ async function renderCalendarView(container) {
 
   const monthName = new Date(_calState.year, _calState.month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   controls.querySelector('#cal-label').textContent = monthName;
+
+  // Show this month's earned badges (persistent label).
+  try {
+    const monthKey = `${_calState.year}-${String(_calState.month + 1).padStart(2, '0')}`;
+    const m = await badgesForMonth(monthKey);
+    if (m && (m.tier || (m.pointBadges && m.pointBadges.length))) {
+      const badgeRow = document.createElement('div');
+      badgeRow.className = 'month-badge-row';
+      badgeRow.innerHTML = `
+        ${m.tier ? `<span class="badge-pill" style="background:${m.tier.color};color:#1a1612;">⬢ ${m.tier.name}</span>` : ''}
+        ${(m.pointBadges || []).map((pb) => `<span class="badge-pill" style="background:#c9a84c;color:white;">🏅 ${pb.name}</span>`).join('')}
+      `;
+      container.appendChild(badgeRow);
+    }
+  } catch (_) {}
 
   const grid = document.createElement('div');
   grid.className = 'cal-grid';
@@ -210,8 +239,9 @@ async function renderCalendarCorrelations(container) {
     const sameDay = topN(0, 3);
     const lag2 = topN(2, 1);
     const lag7 = topN(7, 1);
-    function fmt(rows, label) {
+    function fmt(rows, label, lagged) {
       if (!rows.length) return `<div class="muted" style="font-size:12px;">${label}: not enough data.</div>`;
+      const sep = lagged ? '→' : '↔';
       return `
         <div class="section-title" style="margin:8px 0 4px;">${label}</div>
         ${rows.map((r) => {
@@ -219,7 +249,7 @@ async function renderCalendarCorrelations(container) {
           const cls = Math.abs(r.r) >= 0.6 ? 'high' : Math.abs(r.r) >= 0.3 ? 'mid' : 'low';
           return `
             <div class="var-item" style="border-bottom:1px solid #f0ece4;">
-              <div style="flex:1;min-width:0;font-size:13px;">${escapeHtml(r.a)} ↔ ${escapeHtml(r.b)}</div>
+              <div style="flex:1;min-width:0;font-size:13px;">${escapeHtml(r.a)} ${sep} ${escapeHtml(r.b)}</div>
               <div class="q-streak ${cls}" style="font-variant-numeric:tabular-nums;">${pct >= 0 ? '+' : ''}${pct}%</div>
             </div>
           `;
@@ -227,9 +257,9 @@ async function renderCalendarCorrelations(container) {
       `;
     }
     body.innerHTML = `
-      ${fmt(sameDay, 'Same-day · top 3')}
-      ${fmt(lag2, '2-day lag · top 1')}
-      ${fmt(lag7, '7-day lag · top 1')}
+      ${fmt(sameDay, 'Same-day · top 3', false)}
+      ${fmt(lag2, 'Before → After · 2-day lag · top 1', true)}
+      ${fmt(lag7, 'Before → After · 7-day lag · top 1', true)}
     `;
   } catch (e) {
     body.innerHTML = '<div class="empty-state">Could not compute.</div>';
