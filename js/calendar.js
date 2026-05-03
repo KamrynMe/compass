@@ -82,18 +82,21 @@ async function renderCalendarView(container) {
   const monthName = new Date(_calState.year, _calState.month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   controls.querySelector('#cal-label').textContent = monthName;
 
-  // Show this month's earned badges (persistent label).
+  // Monthly summary: avg pts/day + earned badges.
   try {
     const monthKey = `${_calState.year}-${String(_calState.month + 1).padStart(2, '0')}`;
     const m = await badgesForMonth(monthKey);
-    if (m && (m.tier || (m.pointBadges && m.pointBadges.length))) {
-      const badgeRow = document.createElement('div');
-      badgeRow.className = 'month-badge-row';
-      badgeRow.innerHTML = `
-        ${m.tier ? `<span class="badge-pill" style="background:${m.tier.color};color:#1a1612;">⬢ ${m.tier.name}</span>` : ''}
-        ${(m.pointBadges || []).map((pb) => `<span class="badge-pill" style="background:#c9a84c;color:white;">🏅 ${pb.name}</span>`).join('')}
+    if (m) {
+      const summary = document.createElement('div');
+      summary.className = 'month-summary-row';
+      summary.innerHTML = `
+        <div class="month-avg-pts"><strong>${Math.round(m.avgPts).toLocaleString()}</strong> pts/day average</div>
+        <div class="month-badge-row">
+          ${m.tier ? badgeBlock(m.tier.id, m.tier.name) : ''}
+          ${(m.pointBadges || []).map((pb) => badgeBlock(pb.id, pb.name)).join('')}
+        </div>
       `;
-      container.appendChild(badgeRow);
+      container.appendChild(summary);
     }
   } catch (_) {}
 

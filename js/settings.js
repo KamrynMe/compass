@@ -262,9 +262,39 @@ async function renderSettingsView(container) {
   card4.className = 'card';
   card4.innerHTML = `
     <h3>About</h3>
-    <div class="setting-help">Compass Habits — built ${new Date().toLocaleDateString()}.<br>Made by Cameron Thomas.<br>All data lives only on this device. No accounts.</div>
+    <div class="setting-help">Scheduler · <strong>Beta</strong> — built ${new Date().toLocaleDateString()}.<br>Made by Cameron Thomas.<br>All data lives only on this device unless cloud sync is enabled.</div>
   `;
   container.appendChild(card4);
+
+  // Compress all cards into tap-to-open accordions, except Inbox (already collapsed)
+  // and Storage (must stay inline so the photo-browser button is reachable).
+  collapseSettingsCards(container);
+}
+
+function collapseSettingsCards(container) {
+  const cards = container.querySelectorAll(':scope > .card');
+  cards.forEach((card) => {
+    if (card.classList.contains('inbox-card')) return; // already a summary
+    const h3 = card.querySelector(':scope > h3');
+    if (!h3) return;
+    const titleText = h3.textContent.trim();
+    if (/^Storage/i.test(titleText)) return; // keep inline
+    // Build a <details>; first child summary mirrors the h3 text.
+    const det = document.createElement('details');
+    det.className = card.className + ' card-collapsible';
+    const sum = document.createElement('summary');
+    sum.innerHTML = h3.innerHTML;
+    det.appendChild(sum);
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    // Move all children except h3 into body.
+    Array.from(card.children).forEach((ch) => {
+      if (ch === h3) return;
+      body.appendChild(ch);
+    });
+    det.appendChild(body);
+    card.replaceWith(det);
+  });
 }
 
 function _hmHtml(totalMin, hMax = 23, mStep = 5) {
@@ -463,7 +493,7 @@ async function renderAdvancedCard(container) {
         <div class="setting-help">${isAdmin ? 'Cloud sync is active.' : 'Local-only mode. Admin login enables cloud sync.'}${last ? ' Last sync: ' + new Date(last).toLocaleString() + '.' : ''}</div>
         <div class="row-buttons" style="margin-top:8px;">
           ${isAdmin
-            ? '<button class="btn-secondary" id="adm-pull">Refresh</button><button class="btn-secondary" id="adm-push">Backup</button><button class="btn-danger" id="adm-out">Log out</button>'
+            ? '<button class="btn-primary" id="adm-refresh" style="flex:1;">↻ Refresh</button><button class="btn-danger" id="adm-out">Log out</button>'
             : '<button class="btn-primary" id="adm-in">Log in</button>'}
         </div>
       </div>
@@ -477,14 +507,9 @@ async function renderAdvancedCard(container) {
       showToast(next ? 'Debug on' : 'Debug off');
     });
     if (isAdmin) {
-      card.querySelector('#adm-pull').addEventListener('click', async () => {
-        const r = await pullSyncNow();
-        showToast(r.ok ? 'Pulled ' + (r.days || 0) + ' day(s)' : 'Pull failed');
-        paint();
-      });
-      card.querySelector('#adm-push').addEventListener('click', async () => {
-        await pushSyncNow();
-        showToast('Pushed');
+      card.querySelector('#adm-refresh').addEventListener('click', async () => {
+        const r = await refreshSyncNow();
+        showToast(r.ok ? 'Synced (' + (r.days || 0) + ' remote day(s) merged)' : 'Sync failed: ' + (r.reason || ''));
         paint();
       });
       card.querySelector('#adm-out').addEventListener('click', async () => {

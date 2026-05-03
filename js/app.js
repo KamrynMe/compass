@@ -210,6 +210,13 @@ async function handleTabDoubleTap(id) {
     await setSetting('themeMode', next);
     applyTheme(next);
     showToast('Theme: ' + next);
+  } else if (id === 'achievements') {
+    if (location.hash !== '#achievements') { location.hash = '#achievements'; await new Promise((r) => setTimeout(r, 150)); }
+    const m = document.getElementById('awards-this-month');
+    if (m) {
+      m.open = true;
+      m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   } else if (id === 'analytics') {
     if (location.hash !== '#analytics') { location.hash = '#analytics'; await new Promise((r) => setTimeout(r, 100)); }
     // Toggle: top of page ↔ Relationships Ranking with Daily Score selected.

@@ -15,7 +15,7 @@
 // each device's row separate. To merge two devices' history, the user can
 // "Pull from cloud" once on the second device.
 
-const SYNC_DEBOUNCE_MS = 4000;
+const SYNC_DEBOUNCE_MS = 1500;
 let _syncTimer = null;
 let _syncing = false;
 let _lastPullAt = 0;
@@ -159,6 +159,14 @@ function maybeAutoSync() {
   syncEnabled().then((on) => { if (on) schedulePush(); });
 }
 
+// Combined refresh: pull, merge, push. Returns a stats object.
+async function refreshSyncNow() {
+  const r = await pullSyncNow();
+  // Push the merged state back so cloud reflects whatever local just resolved.
+  try { await pushSyncNow(); } catch (_) {}
+  return r;
+}
+
 // Daily backup — call this from any natural daily event (e.g. weather load).
 async function maybeDailyBackup() {
   if (!(await syncEnabled())) return;
@@ -175,6 +183,18 @@ async function syncBootstrap() {
   if (!(await syncEnabled())) return;
   try {
     await pullSyncNow();
-    schedulePush();
+    // Push merged state back so cloud reflects whatever local resolved to.
+    await pushSyncNow();
   } catch (_) {}
+}
+
+// Flush any pending push synchronously when page is hidden (PWA closed/backgrounded).
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && _syncTimer) {
+      clearTimeout(_syncTimer); _syncTimer = null;
+      // Fire and forget — best effort.
+      pushSyncNow().catch(() => {});
+    }
+  });
 }

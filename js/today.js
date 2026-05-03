@@ -23,6 +23,15 @@ async function renderDayEditor(record, opts = {}) {
   const momCol = momentumColor(momentum);
   const debugOn = !!(await getSetting('debugMomentum'));
 
+  // Streak banner above momentum
+  try {
+    const streakNow = (typeof computeStreak === 'function') ? await computeStreak() : 0;
+    const sb = document.createElement('div');
+    sb.className = 'today-streak-banner';
+    sb.innerHTML = `<span class="today-streak-num">${streakNow}</span><span class="today-streak-fire">🔥</span>`;
+    wrap.appendChild(sb);
+  } catch (_) {}
+
   const momCard = document.createElement('div');
   momCard.className = 'momentum-card' + (momentum != null && momentum >= 100 ? ' glow' : '') + (momentum == null ? ' empty' : '');
   let dbgHtml = '';
@@ -34,6 +43,13 @@ async function renderDayEditor(record, opts = {}) {
       const fmt = (n) => Math.round(n).toLocaleString();
       const past6Lines = (d.past6Scores || []).map((p) => `${p.date.slice(5)}: ${fmt(p.score)}`).join(' · ');
       const top2Lines = (d.top2 || []).map((p) => `${p.date.slice(5)} ${fmt(p.score)}`).join(' + ');
+      // Streak bonus included in debug pane.
+      let streakLine = '';
+      try {
+        const streak = (typeof computeStreak === 'function') ? await computeStreak() : 0;
+        const bonus = (typeof streakBonusPoints === 'function') ? await streakBonusPoints(streak, momentum || 0) : 0;
+        streakLine = `<div>Streak: <strong>${streak}</strong> day${streak === 1 ? '' : 's'} · Bonus: <strong>+${bonus}</strong> pts (base ${Math.min(500, streak * 10)} × min(momentum, 125%))</div>`;
+      } catch (_) {}
       dbgHtml = `
         <div class="mom-debug">
           <div>Past 6 days: ${past6Lines || '—'}</div>
@@ -41,6 +57,7 @@ async function renderDayEditor(record, opts = {}) {
           <div>Today: <strong>${fmt(d.todayScore)}</strong> · Yesterday: <strong>${fmt(d.yesterdayScore)}</strong> · Avg <strong>${fmt(d.tyAvg)}</strong></div>
           <div>(${fmt(d.sumPast6)} ÷ (${fmt(d.top2Sum)} × 3)) × (${fmt(d.tyAvg)} ÷ ${fmt(d.top2Avg)})</div>
           <div>= ${d.factorA.toFixed(3)} × ${d.factorB.toFixed(3)} × 100 = ${momentum}%</div>
+          ${streakLine}
         </div>
       `;
     }
@@ -88,6 +105,12 @@ async function renderDayEditor(record, opts = {}) {
         const fmt2 = (n) => Math.round(n).toLocaleString();
         const past6Lines = (d.past6Scores || []).map((p) => `${p.date.slice(5)}: ${fmt2(p.score)}`).join(' · ');
         const top2Lines = (d.top2 || []).map((p) => `${p.date.slice(5)} ${fmt2(p.score)}`).join(' + ');
+        let streakLine = '';
+        try {
+          const streak = (typeof computeStreak === 'function') ? await computeStreak() : 0;
+          const bonus = (typeof streakBonusPoints === 'function') ? await streakBonusPoints(streak, pct || 0) : 0;
+          streakLine = `<div>Streak: <strong>${streak}</strong> day${streak === 1 ? '' : 's'} · Bonus: <strong>+${bonus}</strong> pts (base ${Math.min(500, streak * 10)} × min(momentum, 125%))</div>`;
+        } catch (_) {}
         slot.innerHTML = `
           <div class="mom-debug">
             <div>Past 6 days: ${past6Lines || '—'}</div>
@@ -95,6 +118,7 @@ async function renderDayEditor(record, opts = {}) {
             <div>Today: <strong>${fmt2(d.todayScore)}</strong> · Yesterday: <strong>${fmt2(d.yesterdayScore)}</strong> · Avg <strong>${fmt2(d.tyAvg)}</strong></div>
             <div>(${fmt2(d.sumPast6)} ÷ (${fmt2(d.top2Sum)} × 3)) × (${fmt2(d.tyAvg)} ÷ ${fmt2(d.top2Avg)})</div>
             <div>= ${d.factorA.toFixed(3)} × ${d.factorB.toFixed(3)} × 100 = ${pct}%</div>
+            ${streakLine}
           </div>`;
       } else {
         slot.innerHTML = '';

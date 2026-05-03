@@ -899,6 +899,25 @@ input[type="time"].input-text { font-family: inherit; }
 .toggle-switch.on { background: var(--gold); border-color: var(--gold-deep); }
 .toggle-switch.on::after { transform: translateX(22px); }
 
+/* Collapsible Settings cards — every card except Storage gets a tap-to-open header. */
+.card-collapsible { padding: 0; }
+.card-collapsible > summary {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 16px; font-weight: 700;
+}
+.card-collapsible > summary::-webkit-details-marker { display: none; }
+.card-collapsible > summary::after {
+  content: '›';
+  margin-left: auto;
+  font-size: 22px; color: var(--ink3);
+  transition: transform 0.18s;
+}
+.card-collapsible[open] > summary::after { transform: rotate(90deg); }
+.card-collapsible > .card-body { padding: 0 16px 16px; }
+
 /* Inbox — collapsed summary card */
 .inbox-card { padding: 0; }
 .inbox-summary {
@@ -956,6 +975,18 @@ input[type="time"].input-text { font-family: inherit; }
   text-align: center;
 }
 .tab { position: relative; }
+
+/* Streak banner above momentum on Today */
+.today-streak-banner {
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  margin: 6px 0 4px;
+  display: flex; justify-content: center; align-items: center; gap: 4px;
+}
+.today-streak-banner .today-streak-num { color: #ff8a3a; font-variant-numeric: tabular-nums; }
+.today-streak-banner .today-streak-fire { font-size: 22px; }
 
 /* Streak card */
 .streak-card {

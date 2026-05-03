@@ -166,8 +166,6 @@ async function getSetting(key) {
   const store = await tx('settings', 'readonly');
   const r = await reqAsPromise(store.get(key));
   if (r) return r.value;
-  // Settings defaults
-  if (key === 'debugMomentum') return true;
   return null;
 }
 
