@@ -144,7 +144,7 @@ function mergeExports(localData, remoteData) {
   }
   out.days = Array.from(localDays.values()).sort((a, b) => a.date.localeCompare(b.date));
   // Settings (remote wins for keys not held locally; locally-set syncConfig is preserved).
-  const skipKeys = new Set(['syncConfig', 'deviceId', 'lastSyncAt']);
+  const skipKeys = new Set(['syncConfig', 'deviceId', 'lastSyncAt', 'debugMomentum', 'lastBackupNagAt', 'themeMode']);
   const localSettings = new Map((localData.settings || []).map((s) => [s.key, s]));
   for (const rs of (remoteData.settings || [])) {
     if (skipKeys.has(rs.key)) continue;

@@ -50,26 +50,25 @@ async function renderSettingsView(container) {
 
   // (Debug moved to Advanced — appears later, after Storage)
 
-  // Completion target — drives the "Unlocked By" projection on Today
-  const targetSel = (await getSetting('completionTarget')) || '';
+  // Score-percent target — drives the projection on Today.
+  const tgtPct = (await getSetting('completionTargetPct')) || 75;
   const cardCT = document.createElement('div');
   cardCT.className = 'card';
-  const opts = QUESTIONS.map((q) => `<option value="${q.id}" ${q.id === targetSel ? 'selected' : ''}>${q.displayNum}. ${escapeHtml((q.emoji || '') + ' ' + q.text).slice(0, 70)}</option>`).join('');
   cardCT.innerHTML = `
-    <h3>Completion Target</h3>
-    <div class="setting-help">Pick a goal that defines "completion" for the projected and fastest unlock dates on the Today tab. If unset, the target is unlocking ALL goals.</div>
+    <h3>Score Target</h3>
+    <div class="setting-help">Pick the overall-score percentage you're aiming for. The Today tab shows projected dates to reach this average.</div>
     <div class="setting-row">
-      <select class="input-text" id="ct-sel">
-        <option value="">— All goals (default) —</option>
-        ${opts}
-      </select>
+      <div class="setting-label">Target: <span id="ct-val">${tgtPct}%</span></div>
+      <input type="range" min="10" max="150" step="5" value="${tgtPct}" id="ct-slider" class="slider-input" style="--c:#c9a84c;">
     </div>
   `;
   container.appendChild(cardCT);
-  cardCT.querySelector('#ct-sel').addEventListener('change', async (e) => {
-    const v = e.target.value || null;
-    await setSetting('completionTarget', v);
-    showToast(v ? 'Target saved' : 'Target cleared');
+  cardCT.querySelector('#ct-slider').addEventListener('input', (e) => {
+    cardCT.querySelector('#ct-val').textContent = e.target.value + '%';
+  });
+  cardCT.querySelector('#ct-slider').addEventListener('change', async (e) => {
+    await setSetting('completionTargetPct', parseInt(e.target.value, 10));
+    showToast('Target saved');
   });
 
   const cardW = document.createElement('div');
@@ -274,26 +273,46 @@ async function renderSettingsView(container) {
 function collapseSettingsCards(container) {
   const cards = container.querySelectorAll(':scope > .card');
   cards.forEach((card) => {
-    if (card.classList.contains('inbox-card')) return; // already a summary
+    if (card.classList.contains('inbox-card')) return;
+    if (card.dataset.collapsibleApplied === '1') return;
     const h3 = card.querySelector(':scope > h3');
     if (!h3) return;
-    const titleText = h3.textContent.trim();
-    if (/^Storage/i.test(titleText)) return; // keep inline
-    // Build a <details>; first child summary mirrors the h3 text.
+    // Mutate the existing card node so any closure references in paint() callbacks
+    // remain valid when later refreshes call card.innerHTML = ...
+    card.classList.add('card-collapsible-host');
     const det = document.createElement('details');
-    det.className = card.className + ' card-collapsible';
+    det.className = 'card-collapsible-inner';
+    det.open = false;
     const sum = document.createElement('summary');
     sum.innerHTML = h3.innerHTML;
     det.appendChild(sum);
-    const body = document.createElement('div');
-    body.className = 'card-body';
-    // Move all children except h3 into body.
-    Array.from(card.children).forEach((ch) => {
-      if (ch === h3) return;
-      body.appendChild(ch);
-    });
-    det.appendChild(body);
-    card.replaceWith(det);
+    // Wrap remaining children inside <details> while keeping `card` as host.
+    while (card.firstChild) det.firstChild.nextSibling
+      ? det.appendChild(card.firstChild)
+      : det.appendChild(card.firstChild);
+    // h3 was moved into details too — remove it (we kept its text in <summary>).
+    const movedH3 = det.querySelector(':scope > h3');
+    if (movedH3) movedH3.remove();
+    card.appendChild(det);
+    card.dataset.collapsibleApplied = '1';
+    // When subsequent paint() calls replace card.innerHTML, re-wrap on the next tick.
+    const reapply = () => {
+      if (!card.querySelector(':scope > details.card-collapsible-inner')) {
+        const h3b = card.querySelector(':scope > h3');
+        if (h3b) {
+          const d2 = document.createElement('details');
+          d2.className = 'card-collapsible-inner';
+          d2.open = det.open;
+          const s2 = document.createElement('summary');
+          s2.innerHTML = h3b.innerHTML;
+          d2.appendChild(s2);
+          h3b.remove();
+          while (card.firstChild) d2.appendChild(card.firstChild);
+          card.appendChild(d2);
+        }
+      }
+    };
+    new MutationObserver(reapply).observe(card, { childList: true });
   });
 }
 

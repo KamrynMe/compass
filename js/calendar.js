@@ -90,7 +90,7 @@ async function renderCalendarView(container) {
       const summary = document.createElement('div');
       summary.className = 'month-summary-row';
       summary.innerHTML = `
-        <div class="month-avg-pts"><strong>${Math.round(m.avgPts).toLocaleString()}</strong> pts/day average</div>
+        <div class="month-avg-pts"><strong>${Math.round(m.avgPts).toLocaleString()}</strong> pts/day</div>
         <div class="month-badge-row">
           ${m.tier ? badgeBlock(m.tier.id, m.tier.name) : ''}
           ${(m.pointBadges || []).map((pb) => badgeBlock(pb.id, pb.name)).join('')}

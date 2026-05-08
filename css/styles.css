@@ -899,24 +899,29 @@ input[type="time"].input-text { font-family: inherit; }
 .toggle-switch.on { background: var(--gold); border-color: var(--gold-deep); }
 .toggle-switch.on::after { transform: translateX(22px); }
 
-/* Collapsible Settings cards — every card except Storage gets a tap-to-open header. */
-.card-collapsible { padding: 0; }
-.card-collapsible > summary {
+/* Collapsible Settings cards — every card gets a tap-to-open header. */
+.card-collapsible-host { padding: 0; }
+.card-collapsible-host > details.card-collapsible-inner > summary {
   display: flex; align-items: center; gap: 10px;
   padding: 16px;
   cursor: pointer;
   list-style: none;
   font-size: 16px; font-weight: 700;
 }
-.card-collapsible > summary::-webkit-details-marker { display: none; }
-.card-collapsible > summary::after {
+.card-collapsible-host > details.card-collapsible-inner > summary::-webkit-details-marker { display: none; }
+.card-collapsible-host > details.card-collapsible-inner > summary::after {
   content: '›';
   margin-left: auto;
   font-size: 22px; color: var(--ink3);
   transition: transform 0.18s;
 }
-.card-collapsible[open] > summary::after { transform: rotate(90deg); }
-.card-collapsible > .card-body { padding: 0 16px 16px; }
+.card-collapsible-host > details.card-collapsible-inner[open] > summary::after { transform: rotate(90deg); }
+.card-collapsible-host > details.card-collapsible-inner > *:not(summary) {
+  padding: 0 16px 16px;
+}
+.card-collapsible-host > details.card-collapsible-inner > div:not(summary) {
+  padding: 0 16px 16px;
+}
 
 /* Inbox — collapsed summary card */
 .inbox-card { padding: 0; }
@@ -1371,8 +1376,8 @@ input[type="time"].input-text { font-family: inherit; }
   position: fixed;
   left: 12px; right: 12px;
   bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 12px);
-  background: var(--ink);
-  color: white;
+  background: #1a1612;
+  color: #ffffff;
   padding: 14px 16px;
   border-radius: 12px;
   display: flex; gap: 12px; align-items: center; justify-content: space-between;

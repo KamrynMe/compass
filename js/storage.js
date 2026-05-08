@@ -137,6 +137,9 @@ async function exportAll() {
   };
 }
 
+// Don't restore session/UI-mode keys when importing — those are per-device prefs.
+const _IMPORT_SKIP_KEYS = new Set(['debugMomentum', 'lastBackupNagAt']);
+
 async function importAll(data) {
   if (!data || !Array.isArray(data.days)) throw new Error('Invalid import file');
   const db = await openDB();
@@ -145,7 +148,12 @@ async function importAll(data) {
     const dayStore = t.objectStore('days');
     const setStore = t.objectStore('settings');
     for (const d of data.days) dayStore.put(d);
-    if (Array.isArray(data.settings)) for (const s of data.settings) setStore.put(s);
+    if (Array.isArray(data.settings)) {
+      for (const s of data.settings) {
+        if (_IMPORT_SKIP_KEYS.has(s.key)) continue;
+        setStore.put(s);
+      }
+    }
     t.oncomplete = resolve;
     t.onerror = () => reject(t.error);
   });

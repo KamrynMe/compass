@@ -137,7 +137,7 @@ async function renderDayEditor(record, opts = {}) {
       <div><div class="score-label">To Beat</div><div class="score-value tight" id="ed-beat">${scoreToBeat.toLocaleString()}</div></div>
       <div><div class="score-label">Best</div><div class="score-value tight" id="ed-best">${bestScore.toLocaleString()}</div></div>
       <div><div class="score-label">Score</div><div class="score-value tight" id="ed-score">0</div></div>
-      <div><div class="score-label">Unlocked By</div><div class="score-value proj tight" id="proj-current">${proj.currentText}</div></div>
+      <div><div class="score-label">${proj.target || 75}% By</div><div class="score-value proj tight" id="proj-current">${proj.currentText}</div></div>
     </div>
     <div class="proj-row">
       <div class="proj-line"><span class="proj-label">Unlocked:</span> ${unlockedCount} / ${QUESTIONS.length}</div>
@@ -285,14 +285,14 @@ async function renderDayEditor(record, opts = {}) {
       row.dataset.qid = q.id;
       row.innerHTML = `
         <div class="q-body">
-          <div class="q-text"><span class="q-num">${q.displayNum}.</span> <span class="q-emoji">${q.emoji || ''}</span> ${escapeHtml(q.text)}${isUnlocked ? '' : ' <span class="q-lock">🔒 Locked</span>'}</div>
+          <div class="q-text"><span class="q-num">${q.displayNum}.</span> <span class="q-emoji">${q.emoji || ''}</span> ${escapeHtml(q.text)}${q.anchor ? ' <span class="q-star">★ Essential</span>' : ''}</div>
           <div class="q-note">${escapeHtml(q.note)}</div>
           <div class="q-slider-row">
             <input type="range" class="q-slider" min="0" max="100" step="5" value="${qrec.value}" ${isUnlocked ? '' : 'disabled'} data-q="${q.id}">
             <span class="q-val" data-val="${q.id}">${qrec.value}</span>
           </div>
           <div class="q-meta-row">
-            <span class="q-streak ${tier}" title="Days at ≥50% in last 7 days">${days5} / 7 days ≥50% &middot; avg ${avg7}</span>
+            <span class="q-streak ${tier}" title="Days at ≥50% in last 30 days">${days5} / 30 days ≥50% &middot; avg ${avg7}</span>
             <span class="q-points-badge" data-points="${q.id}" style="display:none;"></span>
           </div>
           ${q.imageDataUrl ? `<div class="q-image${qrec.note ? ' open' : ''}"><img src="${q.imageDataUrl}" alt=""></div>` : ''}
@@ -331,6 +331,36 @@ async function renderDayEditor(record, opts = {}) {
         else if (qrec.value > 0) { playCheckSound(); flashCheck(row); }
         preInputZero = isNowZero;
       });
+      // Double-tap the row text to toggle 0 ↔ 100 (quick check off).
+      let _lastRowTap = 0;
+      const tapZone = row.querySelector('.q-text');
+      if (tapZone) {
+        tapZone.addEventListener('click', async () => {
+          const now = Date.now();
+          if (now - _lastRowTap < 380) {
+            _lastRowTap = 0;
+            if (!isUnlocked) return;
+            const next = qrec.value > 0 ? 0 : 100;
+            qrec.value = next;
+            slider.value = next;
+            valOut.textContent = next;
+            if (next > 0) {
+              if (!qrec.firstSetAt) qrec.firstSetAt = new Date().toISOString();
+              playCheckSound(); flashCheck(row);
+            } else {
+              qrec.firstSetAt = null;
+              playUncheckSound();
+            }
+            row.classList.toggle('checked', next > 0);
+            await renderPointsBadge(row, q.id);
+            debouncedSave(record);
+            await refreshStreaksAndUnlocks();
+            preInputZero = next === 0;
+            return;
+          }
+          _lastRowTap = now;
+        });
+      }
 
       const noteInput = row.querySelector('.q-noteinput');
       const expandBtn = row.querySelector('.q-expand');
@@ -471,7 +501,7 @@ async function renderDayEditor(record, opts = {}) {
       const d5 = (e2 && typeof e2 === 'object') ? (e2.daysAt50 || 0) : 0;
       const badge = row.querySelector('.q-streak');
       if (badge) {
-        badge.textContent = `${d5} / 7 days ≥50% · avg ${avg}`;
+        badge.textContent = `${d5} / 30 days ≥50% · avg ${avg}`;
         badge.classList.remove('low', 'mid', 'high');
         badge.classList.add(d5 >= 5 ? 'high' : d5 >= 3 ? 'mid' : 'low');
       }
@@ -635,17 +665,28 @@ async function computeBestScore(dateISO) {
   return Math.max(99, best);
 }
 
+// Score the user must hit today to push their Momentum to exactly 100%, given
+// their last-N-day pattern. Solving the same momentum formula:
+//   momentum = (avgLastN / top2Avg) × ((today + yesterday)/2 / top2Avg)
+//   1 = (avgLastN / top2Avg) × ((today + yesterday)/2 / top2Avg)
+//   today = 2 × top2Avg² / avgLastN − yesterday
 async function computeScoreToBeat(dateISO) {
   const all = await getAllDays();
   const past = all.filter((r) => r.date < dateISO);
-  if (past.length < 2) return 99;
-  const last2 = past.slice(-2);
-  let sum = 0;
-  for (const r of last2) {
-    const s = await scoreForRecord(r);
-    sum += s.score;
-  }
-  return Math.max(99, Math.ceil(sum / 2));
+  const n = Math.min(6, past.length);
+  if (n < 2) return 99;
+  const lastN = past.slice(-n);
+  const scores = [];
+  for (const r of lastN) scores.push((await scoreForRecord(r)).score);
+  const sumLastN = scores.reduce((s, x) => s + x, 0);
+  const avgLastN = sumLastN / n;
+  const sortedDesc = [...scores].sort((a, b) => b - a);
+  const top2 = sortedDesc.slice(0, 2);
+  const top2Avg = top2.length ? top2.reduce((s, x) => s + x, 0) / top2.length : 0;
+  const yesterdayScore = scores.length ? scores[scores.length - 1] : 0;
+  if (top2Avg === 0 || avgLastN === 0) return 99;
+  const todayNeeded = 2 * (top2Avg * top2Avg) / avgLastN - yesterdayScore;
+  return Math.max(99, Math.ceil(todayNeeded));
 }
 
 // Steps-remaining helper for parallel-category logic.
@@ -675,72 +716,65 @@ function _stepsForUnlocking(unlocked, targetId) {
   return max;
 }
 
-async function _projectAtDate(referenceISO) {
-  const counts = await recentCheckCounts(referenceISO);
-  const unlocked = await computeUnlockedSet(referenceISO, counts);
-  const targetId = await getSetting('completionTarget');
-  const steps = _stepsForUnlocking(unlocked, targetId);
-  if (steps <= 0) return { steps: 0, fastestDays: 0, currentDays: 0 };
-  const fastestDays = steps * 5;
-  // Probability over reference date's last 7 days.
+// Project days until the user's overall-score % reaches a target percentage.
+// Slider-driven (default 75). Linear regression over last 30 days of overallScorePct.
+async function _projectScorePctAtDate(referenceISO, targetPct) {
   const all = await getAllDays();
   const refDate = new Date(referenceISO + 'T00:00:00');
-  const refStart = new Date(refDate); refStart.setDate(refStart.getDate() - 6);
+  const refStart = new Date(refDate); refStart.setDate(refStart.getDate() - 29);
   const refStartISO = refStart.toISOString().slice(0, 10);
-  let hits = 0, total = 0;
-  for (const r of all) {
-    if (r.date < refStartISO || r.date > referenceISO) continue;
-    if (!r.questions) continue;
-    for (const q of QUESTIONS) {
-      const qr = r.questions[q.id];
-      if (!qr) continue;
-      const v = qr.value != null ? qr.value : (qr.checked ? 100 : 0);
-      total++;
-      if (v >= 50) hits++;
-    }
+  const window = all.filter((r) => r.date >= refStartISO && r.date <= referenceISO);
+  if (window.length < 3) return { fastestDays: null, currentDays: null, currentAvg: null };
+  const pcts = window.map((r) => (r.overallScorePct != null ? r.overallScorePct : 0));
+  const currentAvg = pcts.reduce((s, x) => s + x, 0) / pcts.length;
+  if (currentAvg >= targetPct) return { fastestDays: 0, currentDays: 0, currentAvg };
+  // Linear regression
+  const xs = pcts.map((_, i) => i);
+  const meanX = xs.reduce((s, x) => s + x, 0) / xs.length;
+  let num = 0, denom = 0;
+  for (let i = 0; i < xs.length; i++) {
+    num += (xs[i] - meanX) * (pcts[i] - currentAvg);
+    denom += (xs[i] - meanX) ** 2;
   }
-  const p = total > 0 ? hits / total : 0;
-  const currentDays = p > 0 ? Math.ceil(steps * (5 / p)) : Infinity;
-  return { steps, fastestDays, currentDays: !isFinite(currentDays) || currentDays <= 0 ? fastestDays : currentDays };
+  const slope = denom > 0 ? num / denom : 0;
+  const currentDays = slope > 0 ? Math.ceil((targetPct - currentAvg) / slope) : Infinity;
+  // Fastest: pretend every future day hits 150% (the cap).
+  const maxPct = 150;
+  const fastestDays = currentAvg < maxPct ? Math.ceil(30 * (targetPct - currentAvg) / (maxPct - currentAvg)) : Infinity;
+  return { fastestDays, currentDays, currentAvg };
 }
 
 async function projectUnlockTimes() {
   const today = todayISO();
-  const now = await _projectAtDate(today);
-  if (now.steps <= 0) {
-    return { fastestText: 'Done', currentText: 'Done', compareHtml: '' };
+  const targetPct = (await getSetting('completionTargetPct')) || 75;
+  const now = await _projectScorePctAtDate(today, targetPct);
+  if (now.fastestDays === 0) {
+    return { fastestText: 'Already there', currentText: 'Already there', compareHtml: '', target: targetPct };
   }
-  // 7-days-ago comparison
+  if (now.fastestDays == null) {
+    return { fastestText: '—', currentText: '—', compareHtml: '<div class="proj-line muted">Need at least 3 days of data.</div>', target: targetPct };
+  }
   let compareHtml = '';
   try {
     const ref = new Date(today + 'T00:00:00'); ref.setDate(ref.getDate() - 7);
     const refISO = ref.toISOString().slice(0, 10);
-    const past = await _projectAtDate(refISO);
-    // Convert "from-then" days to absolute dates measured from refISO so we can compare to the today numbers.
-    const fastestPastAbs = past.fastestDays - 7; // remaining if we'd been on track from then
-    const currentPastAbs = past.currentDays - 7;
-    const fastDiff = now.fastestDays - fastestPastAbs;
-    const projDiff = now.currentDays - currentPastAbs;
-    const fmtChange = (d) => {
-      if (!isFinite(d)) return 'No change since last week.';
-      const r = Math.round(d);
-      if (r === 0) return 'Same as last week.';
-      const days = Math.abs(r);
-      const dayWord = days === 1 ? 'day' : 'days';
-      return r < 0
-        ? `${days} ${dayWord} sooner than one week ago.`
-        : `${days} ${dayWord} later than one week ago.`;
+    const past = await _projectScorePctAtDate(refISO, targetPct);
+    const fmtChange = (now, then) => {
+      if (now == null || then == null || !isFinite(now) || !isFinite(then)) return 'Not enough data.';
+      const diff = Math.round(now - (then - 7));
+      if (diff === 0) return 'Same as last week.';
+      const days = Math.abs(diff);
+      const word = days === 1 ? 'day' : 'days';
+      return diff < 0 ? `${days} ${word} sooner than last week.` : `${days} ${word} later than last week.`;
     };
     compareHtml = `
-      <div class="proj-line"><span class="proj-label">Fastest pace:</span> ${fmtChange(fastDiff)}</div>
-      <div class="proj-line"><span class="proj-label">Your pace:</span> ${fmtChange(projDiff)}</div>
+      <div class="proj-line"><span class="proj-label">Fastest pace:</span> ${fmtChange(now.fastestDays, past?.fastestDays)}</div>
+      <div class="proj-line"><span class="proj-label">Your pace:</span> ${fmtChange(now.currentDays, past?.currentDays)}</div>
     `;
   } catch (_) {}
-  return {
-    fastestText: addDaysFmt(now.fastestDays),
-    currentText: addDaysFmt(now.currentDays),
-    compareHtml,
-  };
+  const fastestText = isFinite(now.fastestDays) ? addDaysFmt(now.fastestDays) : '—';
+  const currentText = isFinite(now.currentDays) ? addDaysFmt(now.currentDays) : '—';
+  return { fastestText, currentText, compareHtml, target: targetPct };
 }
 
 function ymdShort(days) {

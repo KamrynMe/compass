@@ -1,69 +1,103 @@
-// Original 26 questions in their habit-stack order. Always present, never removed.
-// IDs stay stable (q1..q26) so saved data + correlation explorer keep working.
-// Custom user goals are merged into QUESTIONS at runtime via rebuildQuestions().
+// Habits in canonical order. IDs stay stable so saved data persists.
+// `anchor` true marks "Essentials". Customs merge in via afterId at runtime.
 const ORIGINAL_QUESTIONS = [
   // PREREQUISITE
-  { id: 'q8',  pillar: 'prerequisite',  emoji: '🛏️', text: 'Did you seal off, prime, and protect your sleep window?',
+  { id: 'q8',  pillar: 'prerequisite', anchor: true,  emoji: '🛏️',
+    text: 'Did you seal off, prime, and protect your sleep window?',
     note: 'Melatonin, light, wind-down.' },
 
   // SPIRITUAL
-  { id: 'q1',  pillar: 'spiritual',  emoji: '📖', text: 'Did you do the text?',
+  { id: 'q1',  pillar: 'spiritual', anchor: true,  emoji: '📖',
+    text: 'Did you do the text?',
     note: "Daily Text read, meditated on, and applied to today's outlook." },
-  { id: 'q2',  pillar: 'spiritual',  emoji: '📚', text: 'Did you read and meditate on meeting preparation?',
+  { id: 'q2',  pillar: 'spiritual', anchor: true,  emoji: '📚',
+    text: 'Did you read and meditate on meeting preparation?',
     note: 'Watchtower (Sun), CBS (Thu), CLAM (Tue) — whichever is next.' },
-  { id: 'q3',  pillar: 'spiritual', emoji: '🏠', text: 'How can you care for your necessary familial relationships?',
+  { id: 'q3',  pillar: 'spiritual', anchor: false, emoji: '🏠',
+    text: 'How can you care for your necessary familial relationships?',
     note: 'One intentional act of presence today.' },
-  { id: 'q4',  pillar: 'spiritual', emoji: '🖥️', text: 'What supplementary studying is available?',
+  { id: 'q4',  pillar: 'spiritual', anchor: false, emoji: '🖥️',
+    text: 'What supplementary studying is available?',
     note: 'Broadcasting, videos, personal study beyond meeting prep.' },
-  { id: 'q5',  pillar: 'spiritual', emoji: '🧆', text: 'How can you make the congregation warmer?',
+  { id: 'q5',  pillar: 'spiritual', anchor: true,  emoji: '🧆',
+    text: 'How can you make the congregation warmer?',
     note: 'One act of warmth — a text, a conversation, noticing someone.' },
-  { id: 'q6',  pillar: 'spiritual',  emoji: '🗂️', text: 'How can you expand your preaching and teaching?',
+  { id: 'q6',  pillar: 'spiritual', anchor: true,  emoji: '🗂️',
+    text: 'How can you expand your preaching and teaching?',
     note: 'Territory, return visits, informal witness.' },
-  { id: 'q7',  pillar: 'spiritual', emoji: '🏔️', text: 'How can you support Jehovah in specialized ways?',
+  { id: 'q7',  pillar: 'spiritual', anchor: false, emoji: '🏔️',
+    text: 'How can you support Jehovah in specialized ways?',
     note: 'LDC contribution, specialized assignments, kingdom hall care.' },
 
-  // HEALTH (sleep moved to prerequisite)
-  { id: 'q9',  pillar: 'health',  emoji: '🍗', text: 'Are you eating healthily?',
+  // HEALTH (now with cleanliness + hygiene as essentials)
+  { id: 'q9',  pillar: 'health', anchor: true,  emoji: '🍗',
+    text: 'Are you eating healthily?',
     note: 'Huel + Berries base. Fasted window honored. Gut health.' },
-  { id: 'q10', pillar: 'health',  emoji: '⛹🏽‍♂️', text: 'Are you getting stronger and more capable?',
+  { id: 'q27', pillar: 'health', anchor: true,  emoji: '🧹',
+    text: 'Are you keeping up cleanliness in your environment?',
+    note: 'Tidy spaces, tools put away, surfaces wiped.' },
+  { id: 'q28', pillar: 'health', anchor: true,  emoji: '🪥',
+    text: 'Are you taking care of your personal hygiene aims?',
+    note: 'Daily care routines kept up.' },
+  { id: 'q10', pillar: 'health', anchor: false, emoji: '⛹🏽‍♂️',
+    text: 'Are you getting stronger and more capable?',
     note: 'Training completed. Hot/cold exposure.' },
-  { id: 'q11', pillar: 'health', emoji: '🥬', text: 'Neurogenesis, Stem cells, Telomeres, Mitochondria, Inflammation, Autophagy.',
+  { id: 'q11', pillar: 'health', anchor: false, emoji: '🥬',
+    text: 'Neurogenesis, Stem cells, Telomeres, Mitochondria, Inflammation, Autophagy.',
     note: 'Are longevity protocols active this week?' },
 
-  // STRATEGY
-  { id: 'q12', pillar: 'strategy',  emoji: '🧮', text: 'Organized systems to automate days and weeks — preparation for alpha flow state?',
+  // STRATEGY — q15 promoted to first slot, rewritten as Essential
+  { id: 'q15', pillar: 'strategy', anchor: true,  emoji: '🔨',
+    text: 'Has beta enabled sufficient micro-skill investments for needs?',
+    note: 'Ensure Beta tasks satisfy minimum needs.' },
+  { id: 'q12', pillar: 'strategy', anchor: false, emoji: '🧮',
+    text: 'Organized systems to automate days and weeks — preparation for alpha flow state?',
     note: "Tomorrow's environment set. Friction removed." },
-  { id: 'q13', pillar: 'strategy', emoji: '🧠', text: 'Time allocated for Gamma schedule scrutinization for improvement?',
+  { id: 'q13', pillar: 'strategy', anchor: false, emoji: '🧠',
+    text: 'Time allocated for Gamma schedule scrutinization for improvement?',
     note: 'Weekly audit of the structure.' },
-  { id: 'q14', pillar: 'strategy', emoji: '🧘🏾‍♂️', text: 'Protected space and time for Theta gratitude and visualization?',
+  { id: 'q14', pillar: 'strategy', anchor: false, emoji: '🧘🏾‍♂️',
+    text: 'Protected space and time for Theta gratitude and visualization?',
     note: 'Quiet, unscheduled. Image, feel, gratitude.' },
-  { id: 'q15', pillar: 'strategy', emoji: '🔨', text: 'Does Beta have a job this week?',
-    note: 'Reactive mode assigned specific slots.' },
-  { id: 'q16', pillar: 'strategy', emoji: '🎵', text: 'Music set aside to support all modes?',
+  { id: 'q16', pillar: 'strategy', anchor: false, emoji: '🎵',
+    text: 'Music set aside to support all modes?',
     note: 'Alpha, theta, ambient audio environment ready.' },
 
-  // FINANCIAL
-  { id: 'q17', pillar: 'financial',  emoji: '🤹', text: 'Psychology hitting the mark in real life practice?',
+  // EXPANSION (formerly Financial)
+  { id: 'q17', pillar: 'expansion', anchor: false, emoji: '🤹',
+    text: 'Psychology hitting the mark in real life practice?',
     note: 'Where did it land this week?' },
-  { id: 'q18', pillar: 'financial', emoji: '🎡', text: 'Is what can be reliably automated, automated?',
+  { id: 'q18', pillar: 'expansion', anchor: false, emoji: '🎡',
+    text: 'Is what can be reliably automated, automated?',
     note: 'One system to build or refine this week.' },
 
-  // ENJOYMENT
-  { id: 'q19', pillar: 'enjoyment', emoji: '🫂', text: 'How can I be a good friend to two people this week?',
+  // ENJOYMENT — athleticism slotted in as Essential
+  { id: 'q29', pillar: 'enjoyment', anchor: true,  emoji: '🏀',
+    text: 'Have I enjoyed athleticism?',
+    note: 'Stay active and capable — play, move, push.' },
+  { id: 'q19', pillar: 'enjoyment', anchor: false, emoji: '🫂',
+    text: 'How can I be a good friend to two people this week?',
     note: 'Name them. One specific act each.' },
-  { id: 'q20', pillar: 'enjoyment', emoji: '🐬', text: 'How can I connect with what Jehovah created this week?',
+  { id: 'q20', pillar: 'enjoyment', anchor: false, emoji: '🐬',
+    text: 'How can I connect with what Jehovah created this week?',
     note: 'Outside. Full attention. 15 minutes minimum.' },
-  { id: 'q21', pillar: 'enjoyment', emoji: '🃏', text: 'How can I strengthen my logical strategic muscle under fun, safe conditions?',
+  { id: 'q21', pillar: 'enjoyment', anchor: false, emoji: '🃏',
+    text: 'How can I strengthen my logical strategic muscle under fun, safe conditions?',
     note: 'Chess, puzzles, games.' },
-  { id: 'q22', pillar: 'enjoyment', emoji: '🏏', text: 'How can I create fun situations for new people?',
+  { id: 'q22', pillar: 'enjoyment', anchor: false, emoji: '🏏',
+    text: 'How can I create fun situations for new people?',
     note: 'Curate a context, not a conversation.' },
-  { id: 'q23', pillar: 'enjoyment', emoji: '🗣️', text: 'How can I be comfortable, myself, and spontaneous?',
+  { id: 'q23', pillar: 'enjoyment', anchor: false, emoji: '🗣️',
+    text: 'How can I be comfortable, myself, and spontaneous?',
     note: 'Leave one window truly open this week.' },
-  { id: 'q24', pillar: 'enjoyment', emoji: '⛓️', text: 'How can I build something soon?',
+  { id: 'q24', pillar: 'enjoyment', anchor: false, emoji: '⛓️',
+    text: 'How can I build something soon?',
     note: 'Physical, digital, or conceptual. Schedule it.' },
-  { id: 'q25', pillar: 'enjoyment', emoji: '🪐', text: 'How can I learn about physics soon?',
+  { id: 'q25', pillar: 'enjoyment', anchor: false, emoji: '🪐',
+    text: 'How can I learn about physics soon?',
     note: 'One concept. One video. One thought experiment.' },
-  { id: 'q26', pillar: 'enjoyment', emoji: '🎹', text: 'When can I learn about music, so I can eventually make it?',
+  { id: 'q26', pillar: 'enjoyment', anchor: false, emoji: '🎹',
+    text: 'When can I learn about music, so I can eventually make it?',
     note: 'Theory, ear training. Learning is the path.' },
 ];
 
@@ -130,8 +164,42 @@ async function initQuestions() {
   PILLARS.length = 0;
   for (const p of PILLARS_BUILTIN) PILLARS.push(p);
   for (const p of customs) PILLARS.push({ ...p, custom: true });
-  const list = await loadUserGoals();
+
+  let list = await loadUserGoals();
+  list = await _migrateGoalsToCanonical(list);
   rebuildQuestionsFrom(list);
+}
+
+// Idempotent: forces ORIGINAL_QUESTIONS as the canonical source for original
+// items (text/note/emoji/anchor/pillar/order), while preserving user-added
+// customs at their afterId positions, plus any per-goal startDate / imageDataUrl.
+async function _migrateGoalsToCanonical(savedList) {
+  const saved = Array.isArray(savedList) ? savedList : [];
+  const savedMap = new Map(saved.map((q) => [q.id, q]));
+  // Migrate pillar rename
+  for (const q of saved) if (q.pillar === 'financial') q.pillar = 'expansion';
+  // Pull customs and remember their afterId so we can reinsert them.
+  const customs = saved.filter((q) => q.custom || (!ORIGINAL_QUESTIONS.find((o) => o.id === q.id)));
+  // Build fresh originals from ORIGINAL_QUESTIONS, preserving user data fields.
+  const fresh = ORIGINAL_QUESTIONS.map((orig) => {
+    const ex = savedMap.get(orig.id);
+    return {
+      ...orig,
+      original: true,
+      ...(ex && ex.startDate ? { startDate: ex.startDate } : {}),
+      ...(ex && ex.imageDataUrl ? { imageDataUrl: ex.imageDataUrl } : {}),
+    };
+  });
+  // Insert customs into the fresh order by afterId; fall back to end.
+  let result = [...fresh];
+  for (const c of customs) {
+    if (c.pillar === 'financial') c.pillar = 'expansion';
+    const idx = c.afterId ? result.findIndex((q) => q.id === c.afterId) : -1;
+    if (idx >= 0) result.splice(idx + 1, 0, { ...c, custom: true });
+    else result.push({ ...c, custom: true });
+  }
+  await saveUserGoals(result);
+  return result;
 }
 
 // Display number = 1-based index in current QUESTIONS order.
@@ -179,7 +247,7 @@ const PILLARS_BUILTIN = [
   { id: 'spiritual',    name: 'Spiritual',    symbol: '✦' },
   { id: 'health',       name: 'Health',       symbol: '◈' },
   { id: 'strategy',     name: 'Strategy',     symbol: '◎' },
-  { id: 'financial',    name: 'Financial',    symbol: '◇' },
+  { id: 'expansion',    name: 'Expansion',    symbol: '◇' },
   { id: 'enjoyment',    name: 'Enjoyment',    symbol: '◉' },
 ];
 // PILLARS reflects built-ins + customs at runtime; populated by initQuestions().
@@ -200,18 +268,19 @@ const SLIDERS = [
 // A habit is unlocked when its predecessor in QUESTIONS order has been checked
 // at least 5 times in the previous 7 days (not counting today). The first habit
 // is always unlocked.
-// Returns { qid: { avg, daysAt50 } } over the last 7 days (honoring startDate).
+// Returns { qid: { avg, daysAt50, window } } over the last 30 days (honoring startDate).
+// `window` is the actual number of eligible days observed (≤30).
 async function recentCheckCounts(dateISO) {
   const endDate = new Date(dateISO + 'T00:00:00');
   const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - 6);
+  startDate.setDate(startDate.getDate() - 29);
   const startISO = startDate.toISOString().slice(0, 10);
   const recent = await getDaysInRange(startISO, dateISO);
   const out = {};
   for (const q of QUESTIONS) {
     const qStart = q.startDate || '0000-01-01';
     const eligible = recent.filter((r) => r.date >= qStart);
-    const denom = Math.max(1, Math.min(7, eligible.length));
+    const denom = Math.max(1, Math.min(30, eligible.length));
     let sum = 0;
     let daysAt50 = 0;
     for (const r of eligible) {
@@ -221,7 +290,7 @@ async function recentCheckCounts(dateISO) {
       sum += v;
       if (v >= 50) daysAt50++;
     }
-    out[q.id] = { avg: sum / denom, daysAt50 };
+    out[q.id] = { avg: sum / denom, daysAt50, window: eligible.length };
   }
   return out;
 }
@@ -246,16 +315,27 @@ async function pillarScorePct(record, pillarId) {
   const habits = QUESTIONS.filter((q) => q.pillar === pillarId);
   const target = pillarTarget(pillarId);
   if (target === 0) return 0;
+  // Essentials rate is global; factor applied to non-essentials within the pillar.
+  const allEssentials = QUESTIONS.filter((q) => q.anchor);
+  let essentialsValueSum = 0;
+  for (const q of allEssentials) {
+    const qr = record.questions?.[q.id];
+    essentialsValueSum += qr ? valueOf(qr) : 0;
+  }
+  const essentialsRate = allEssentials.length ? (essentialsValueSum / (allEssentials.length * 100)) : 1;
+  const factor = Math.min(1.25, essentialsRate * essentialsRate);
   let actual = 0;
-  for (const q of habits) actual += await pointsForCheck(record, q.id);
+  for (const q of habits) {
+    const pts = await pointsForCheck(record, q.id);
+    actual += q.anchor ? pts : Math.round(pts * factor);
+  }
   return (actual / target) * 100;
 }
 async function overallScorePct(record) {
   const target = dailyTarget();
   if (target === 0) return 0;
-  let actual = 0;
-  for (const q of QUESTIONS) actual += await pointsForCheck(record, q.id);
-  return (actual / target) * 100;
+  const s = await scoreForRecord(record);
+  return (s.score / target) * 100;
 }
 
 // Threshold helper.
@@ -267,7 +347,11 @@ function _ok(c, qid) {
   return (e.daysAt50 || 0) >= 5;
 }
 
-async function computeUnlockedSet(dateISO, counts) {
+async function computeUnlockedSet(/* dateISO, counts */) {
+  // Unlock mechanic removed — every habit is always available.
+  return new Set(QUESTIONS.map((q) => q.id));
+}
+async function _legacyComputeUnlockedSet_unused(dateISO, counts) {
   const c = counts || (await recentCheckCounts(dateISO));
   const unlocked = new Set();
   // Group by pillar in QUESTIONS order.
@@ -351,24 +435,33 @@ async function pointsForCheck(record, qid) {
   return Math.round(v * scoreMultiplierFor(t, wake, wind, record.date));
 }
 
-// Total daily score = Σ ROUND(value × multiplier) per habit. Round per-habit so
-// the daily total matches what the per-row badges add up to.
+// Total daily score with the essentials-squared factor on non-essentials.
+//   essentialsRate = sum(essentials' value)/((# essentials) × 100)  (0–1)
+//   factor = min(1.25, essentialsRate²)
+//   total = Σ essentials_pts + factor × Σ non_essentials_pts
 async function scoreForRecord(record) {
   if (!record) return { score: 0, possible: 0, checks: 0 };
   const { wake, wind } = await getWakeWind();
-  let total = 0;
+  let essentialsPts = 0, nonEssentialsPts = 0;
+  let essentialsValueSum = 0, essentialsCount = 0;
   let checks = 0;
   for (const q of QUESTIONS) {
     const qr = record.questions?.[q.id];
+    if (q.anchor) essentialsCount++;
     if (!qr) continue;
     const v = valueOf(qr);
+    if (q.anchor) essentialsValueSum += v;
     if (v > 0) {
       const t = qr.firstSetAt || qr.checkedAt || qr.lastChangedAt || record.lastEditedAt;
-      total += Math.round(v * scoreMultiplierFor(t, wake, wind, record.date));
+      const pts = Math.round(v * scoreMultiplierFor(t, wake, wind, record.date));
+      if (q.anchor) essentialsPts += pts; else nonEssentialsPts += pts;
       checks++;
     }
   }
-  return { score: total, possible: QUESTIONS.length * 500, checks };
+  const essentialsRate = essentialsCount > 0 ? (essentialsValueSum / (essentialsCount * 100)) : 1;
+  const factor = Math.min(1.25, essentialsRate * essentialsRate);
+  const total = essentialsPts + Math.round(nonEssentialsPts * factor);
+  return { score: total, possible: QUESTIONS.length * 500, checks, essentialsRate, factor };
 }
 
 // Seconds until the multiplier for a habit set NOW will tick down by enough to

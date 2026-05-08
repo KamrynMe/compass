@@ -141,8 +141,8 @@ function badgeSvg(id, size = 64) {
 function badgeBlock(id, label, won = true) {
   return `
     <div class="badge-block ${won ? 'won' : 'unclaimed'}">
-      <div class="badge-svg">${badgeSvg(id)}</div>
       <div class="badge-label">${label}</div>
+      <div class="badge-svg">${badgeSvg(id)}</div>
     </div>
   `;
 }
