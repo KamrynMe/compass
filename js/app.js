@@ -215,9 +215,17 @@ async function handleTabDoubleTap(id) {
   } else if (id === 'achievements') {
     if (location.hash !== '#achievements') { location.hash = '#achievements'; await new Promise((r) => setTimeout(r, 150)); }
     const m = document.getElementById('awards-this-month');
-    if (m) {
+    // Toggle: this-month-expanded-and-centered ↔ all-collapsed-and-top.
+    const isAtMonthView = m && m.open && Math.abs(m.getBoundingClientRect().top - (window.innerHeight / 2 - m.offsetHeight / 2)) < 80;
+    if (isAtMonthView) {
+      // Collapse every <details> in the awards view and scroll to top.
+      document.querySelectorAll('#view details[open]').forEach((d) => { d.open = false; });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (m) {
       m.open = true;
       m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   } else if (id === 'analytics') {
     if (location.hash !== '#analytics') { location.hash = '#analytics'; await new Promise((r) => setTimeout(r, 100)); }
