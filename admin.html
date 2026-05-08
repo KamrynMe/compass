@@ -19,6 +19,8 @@
     --gold-deep: #8a6820;
     --green: #1ec45a;
     --red: #c05050;
+    --blue: #4a7ab0;
+    --purple: #8a5ab0;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -59,10 +61,20 @@
     border: 1px solid var(--rule); border-radius: 8px;
     padding: 8px 12px; font-weight: 600; cursor: pointer; min-height: 36px;
   }
+  .btn-secondary:hover { background: #2a2418; }
   .btn-danger {
     background: var(--red); color: white; border: none;
     border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer;
   }
+  .btn-action {
+    border: none; border-radius: 8px; padding: 8px 12px;
+    font-size: 13px; font-weight: 700; cursor: pointer; color: white;
+  }
+  .btn-snooze { background: #5a4818; color: var(--gold); border: 1px solid var(--gold-deep); }
+  .btn-copy { background: #1a3550; color: #b4d5ff; border: 1px solid #2c5680; }
+  .btn-complete { background: #154e2a; color: #b8f5cf; border: 1px solid #1f7a40; }
+  .btn-reopen { background: #4a3018; color: #f0d4a0; border: 1px solid #6e4624; }
+  .btn-delete { background: #4a1818; color: #ffb4b4; border: 1px solid #6e2424; }
   .row { display: flex; gap: 8px; align-items: center; }
   .row > * { flex: 1; }
   .empty { color: var(--ink3); text-align: center; padding: 32px 8px; }
@@ -71,6 +83,9 @@
     padding: 14px 0;
   }
   .fb-row:first-child { border-top: none; }
+  .fb-row.snoozed { opacity: 0.65; }
+  .fb-row.completed { opacity: 0.55; }
+  .fb-row.completed .fb-body { text-decoration: line-through; text-decoration-color: var(--ink3); }
   .fb-meta {
     color: var(--ink3); font-size: 12px;
     display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
@@ -78,6 +93,9 @@
   }
   .fb-body { white-space: pre-wrap; line-height: 1.55; }
   .fb-id { font-family: ui-monospace, Consolas, Menlo, monospace; opacity: 0.7; font-size: 11px; }
+  .fb-actions {
+    margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;
+  }
   .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
   .toolbar .input { flex: 1; min-width: 0; }
   .pill {
@@ -85,6 +103,19 @@
     font-size: 11px; font-weight: 700; background: var(--surface); color: var(--ink2);
     border: 1px solid var(--rule);
   }
+  .pill.snoozed { background: #2a2210; color: var(--gold); border-color: var(--gold-deep); }
+  .pill.completed { background: #102e1a; color: #4dd587; border-color: #1f7a40; }
+  .filter-tabs {
+    display: flex; gap: 0; margin-bottom: 14px;
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 10px; padding: 4px; overflow: hidden;
+  }
+  .filter-tab {
+    flex: 1; background: transparent; border: none;
+    padding: 8px 12px; color: var(--ink3); font-weight: 700;
+    border-radius: 6px; cursor: pointer; min-height: 38px;
+  }
+  .filter-tab.active { background: var(--gold); color: #1a1612; }
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
     background: #2a2418; color: var(--ink);
@@ -111,6 +142,12 @@
     <h1>Feedback inbox</h1>
     <p class="sub" id="counts">—</p>
 
+    <div class="filter-tabs" id="filter-tabs">
+      <button class="filter-tab active" data-filter="open">Uncompleted</button>
+      <button class="filter-tab" data-filter="done">Completed</button>
+      <button class="filter-tab" data-filter="all">All</button>
+    </div>
+
     <div class="toolbar">
       <input class="input" id="search" placeholder="Search feedback…">
       <button class="btn-secondary" id="refresh">Refresh</button>
@@ -127,95 +164,162 @@
   const ADMIN_USER = 'KamrynMe';
   const ADMIN_PASS = 'Wordpass1';
   const SESSION_KEY = 'sched_admin_ok';
+  const FILTER_KEY = 'sched_admin_filter';
 
   function $(s) { return document.querySelector(s); }
   function show(id) { $('#login').style.display = id === 'login' ? 'block' : 'none'; $('#dash').style.display = id === 'dash' ? 'block' : 'none'; }
-  function toast(msg, ms = 2500) {
+  function toast(msg, ms = 1800) {
     const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
     document.body.appendChild(t); setTimeout(() => t.remove(), ms);
   }
-
-  function isLoggedIn() {
-    try { return sessionStorage.getItem(SESSION_KEY) === '1'; } catch (_) { return false; }
-  }
+  function isLoggedIn() { try { return sessionStorage.getItem(SESSION_KEY) === '1'; } catch (_) { return false; } }
   function setLoggedIn(b) { try { sessionStorage.setItem(SESSION_KEY, b ? '1' : ''); } catch (_) {} }
+  function getFilter() { try { return localStorage.getItem(FILTER_KEY) || 'open'; } catch (_) { return 'open'; } }
+  function setFilter(v) { try { localStorage.setItem(FILTER_KEY, v); } catch (_) {} }
 
   async function fetchFeedback() {
-    const url = `${SUPABASE_URL}/rest/v1/feedback?select=*&order=created_at.desc&limit=500`;
+    const url = `${SUPABASE_URL}/rest/v1/feedback?select=*&order=created_at.desc&limit=1000`;
     const r = await fetch(url, {
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      },
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
   }
-
+  async function patchFeedback(id, patch) {
+    const url = `${SUPABASE_URL}/rest/v1/feedback?id=eq.${encodeURIComponent(id)}`;
+    const r = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify(patch),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  }
   async function deleteFeedback(id) {
     const url = `${SUPABASE_URL}/rest/v1/feedback?id=eq.${encodeURIComponent(id)}`;
     const r = await fetch(url, {
       method: 'DELETE',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      },
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
   }
 
   function escapeHtml(s) {
-    return String(s ?? '')
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-  function fmtDate(s) {
-    if (!s) return '';
-    const d = new Date(s);
-    return d.toLocaleString();
-  }
+  function fmtDate(s) { if (!s) return ''; return new Date(s).toLocaleString(); }
 
   let _all = [];
+  let _filter = getFilter();
+
   async function refresh() {
     $('#list').innerHTML = '<div class="empty">Loading…</div>';
-    try {
-      _all = await fetchFeedback();
-      render();
-    } catch (e) {
-      $('#list').innerHTML = `<div class="empty">Could not load feedback: ${escapeHtml(e.message || e)}</div>`;
-    }
+    try { _all = await fetchFeedback(); render(); }
+    catch (e) { $('#list').innerHTML = `<div class="empty">Could not load: ${escapeHtml(e.message || e)}</div>`; }
+  }
+
+  function applyFilter(rows) {
+    if (_filter === 'open') return rows.filter((r) => !r.completed_at);
+    if (_filter === 'done') return rows.filter((r) => !!r.completed_at);
+    return rows;
+  }
+
+  function applySort(rows) {
+    // Open: snoozed sink to bottom; otherwise newest first.
+    // Done: completed_at desc.
+    // All: completed at the bottom; within open the same snooze rule.
+    const score = (r) => {
+      let bucket = 0; // 0 active, 1 snoozed, 2 completed
+      if (r.completed_at) bucket = 2;
+      else if (r.snoozed_at) bucket = 1;
+      const t = new Date(r.completed_at || r.snoozed_at || r.created_at || 0).getTime();
+      return [bucket, -t];
+    };
+    return rows.slice().sort((a, b) => {
+      const sa = score(a), sb = score(b);
+      if (sa[0] !== sb[0]) return sa[0] - sb[0];
+      return sa[1] - sb[1];
+    });
   }
 
   function render() {
+    document.querySelectorAll('.filter-tab').forEach((b) => b.classList.toggle('active', b.dataset.filter === _filter));
     const q = ($('#search').value || '').trim().toLowerCase();
-    const filtered = q ? _all.filter((r) => (r.body || '').toLowerCase().includes(q) || (r.device_id || '').toLowerCase().includes(q)) : _all;
-    $('#counts').textContent = `${filtered.length} message${filtered.length === 1 ? '' : 's'}${q ? ` (filtered from ${_all.length})` : ''}`;
-    if (!filtered.length) {
-      $('#list').innerHTML = '<div class="empty">No feedback yet.</div>';
-      return;
-    }
-    $('#list').innerHTML = filtered.map((r) => `
-      <div class="fb-row" data-id="${escapeHtml(r.id)}">
-        <div class="fb-meta">
-          <span>${fmtDate(r.created_at)} <span class="pill">${escapeHtml(r.app_version || '?')}</span></span>
-          <span class="fb-id">${escapeHtml((r.device_id || '').slice(0, 8))}…</span>
+    let rows = applyFilter(_all);
+    if (q) rows = rows.filter((r) => (r.body || '').toLowerCase().includes(q) || (r.device_id || '').toLowerCase().includes(q));
+    rows = applySort(rows);
+
+    const totalOpen = _all.filter((r) => !r.completed_at).length;
+    const totalDone = _all.filter((r) => !!r.completed_at).length;
+    $('#counts').textContent = `${totalOpen} open · ${totalDone} completed · ${_all.length} total${q ? ` (showing ${rows.length})` : ''}`;
+
+    if (!rows.length) { $('#list').innerHTML = '<div class="empty">No feedback to show.</div>'; return; }
+
+    $('#list').innerHTML = rows.map((r) => {
+      const cls = r.completed_at ? 'completed' : (r.snoozed_at ? 'snoozed' : '');
+      const tag = r.completed_at
+        ? `<span class="pill completed">Done · ${fmtDate(r.completed_at)}</span>`
+        : (r.snoozed_at ? `<span class="pill snoozed">Snoozed · ${fmtDate(r.snoozed_at)}</span>` : '');
+      const completeBtn = r.completed_at
+        ? `<button class="btn-action btn-reopen" data-act="reopen">↺ Reopen</button>`
+        : `<button class="btn-action btn-complete" data-act="complete">✓ Completed</button>`;
+      const snoozeBtn = r.completed_at
+        ? ''
+        : (r.snoozed_at
+            ? `<button class="btn-action btn-snooze" data-act="unsnooze">⏰ Unsnooze</button>`
+            : `<button class="btn-action btn-snooze" data-act="snooze">💤 Snooze</button>`);
+      return `
+        <div class="fb-row ${cls}" data-id="${escapeHtml(r.id)}">
+          <div class="fb-meta">
+            <span>${fmtDate(r.created_at)} <span class="pill">${escapeHtml(r.app_version || '?')}</span> ${tag}</span>
+            <span class="fb-id">${escapeHtml((r.device_id || '').slice(0, 8))}…</span>
+          </div>
+          <div class="fb-body">${escapeHtml(r.body || '')}</div>
+          <div class="fb-actions">
+            <button class="btn-action btn-copy" data-act="copy">📋 Copy</button>
+            ${snoozeBtn}
+            ${completeBtn}
+            <button class="btn-action btn-delete" data-act="delete">Delete</button>
+          </div>
         </div>
-        <div class="fb-body">${escapeHtml(r.body || '')}</div>
-        <div style="margin-top:8px;display:flex;justify-content:flex-end;">
-          <button class="btn-danger" data-act="del">Delete</button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
+
     document.querySelectorAll('.fb-row').forEach((row) => {
-      row.querySelector('[data-act="del"]').addEventListener('click', async () => {
+      const id = row.dataset.id;
+      const r = _all.find((x) => String(x.id) === id);
+      const act = (name) => row.querySelector(`[data-act="${name}"]`);
+      const wrap = async (fn, label) => {
+        try { await fn(); toast(label); refresh(); }
+        catch (e) { toast('Failed: ' + (e.message || e)); }
+      };
+      act('copy')?.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(r?.body || ''); toast('Copied'); }
+        catch (_) { toast('Copy failed'); }
+      });
+      act('snooze')?.addEventListener('click', () => wrap(
+        () => patchFeedback(id, { snoozed_at: new Date().toISOString() }),
+        'Snoozed'
+      ));
+      act('unsnooze')?.addEventListener('click', () => wrap(
+        () => patchFeedback(id, { snoozed_at: null }),
+        'Unsnoozed'
+      ));
+      act('complete')?.addEventListener('click', () => wrap(
+        () => patchFeedback(id, { completed_at: new Date().toISOString(), snoozed_at: null }),
+        'Marked complete'
+      ));
+      act('reopen')?.addEventListener('click', () => wrap(
+        () => patchFeedback(id, { completed_at: null }),
+        'Reopened'
+      ));
+      act('delete')?.addEventListener('click', async () => {
         if (!confirm('Delete this feedback message?')) return;
-        try {
-          await deleteFeedback(row.dataset.id);
-          _all = _all.filter((x) => String(x.id) !== row.dataset.id);
-          render();
-        } catch (e) {
-          toast('Delete failed: ' + (e.message || e));
-        }
+        wrap(() => deleteFeedback(id), 'Deleted');
       });
     });
   }
@@ -223,23 +327,18 @@
   $('#login-btn').addEventListener('click', () => {
     const u = $('#u').value.trim();
     const p = $('#p').value;
-    if (u !== ADMIN_USER || p !== ADMIN_PASS) {
-      toast('Invalid credentials');
-      return;
-    }
-    setLoggedIn(true);
-    show('dash');
-    refresh();
+    if (u !== ADMIN_USER || p !== ADMIN_PASS) { toast('Invalid credentials'); return; }
+    setLoggedIn(true); show('dash'); refresh();
   });
   $('#logout').addEventListener('click', () => {
-    setLoggedIn(false);
-    show('login');
-    $('#u').value = ''; $('#p').value = '';
+    setLoggedIn(false); show('login'); $('#u').value = ''; $('#p').value = '';
   });
   $('#refresh').addEventListener('click', refresh);
   $('#search').addEventListener('input', () => render());
+  document.querySelectorAll('.filter-tab').forEach((b) => {
+    b.addEventListener('click', () => { _filter = b.dataset.filter; setFilter(_filter); render(); });
+  });
 
-  // Boot
   if (isLoggedIn()) { show('dash'); refresh(); } else { show('login'); $('#u').focus(); }
 </script>
 </body>
