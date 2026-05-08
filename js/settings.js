@@ -271,46 +271,69 @@ async function renderSettingsView(container) {
 
 function menuizeSettingsCards(container) {
   const cards = container.querySelectorAll(':scope > .card');
-  cards.forEach((card) => {
-    if (card.classList.contains('card-about')) return; // About stays inline
-    if (card.dataset.menuized === '1') return;
-    const h3 = card.querySelector(':scope > h3');
-    if (!h3) return;
-    card.dataset.menuized = '1';
+  cards.forEach((card) => menuizeCard(card, container));
+}
 
-    // Hide the card body by default; show only the menu row.
-    card.classList.add('card-menu-host');
+function menuizeCard(card, container) {
+  if (card.classList.contains('card-about')) return;
+  if (card.dataset.menuized === '1') return;
+  const h3 = card.querySelector(':scope > h3');
+  if (!h3) return;
+  card.dataset.menuized = '1';
+  card.classList.add('card-menu-host');
+  applyMenuRow(card, container);
 
-    const row = document.createElement('button');
-    row.className = 'settings-menu-row';
-    row.innerHTML = `<span class="settings-menu-title">${h3.innerHTML}</span><span class="settings-menu-chev">›</span>`;
-
-    // Insert row before the h3 (which we'll keep but hide visually inside the
-    // menu when collapsed, and display when active for context).
-    card.insertBefore(row, h3);
-
-    row.addEventListener('click', () => {
-      document.body.classList.add('settings-menu-open');
-      card.classList.add('card-menu-active');
-      // Add a back button + safe-area scaffolding once.
-      if (!card.querySelector(':scope > .settings-menu-back')) {
-        const back = document.createElement('button');
-        back.className = 'settings-menu-back';
-        back.innerHTML = '←';
-        back.setAttribute('aria-label', 'Back');
-        back.addEventListener('click', (e) => {
-          e.stopPropagation();
-          card.classList.remove('card-menu-active');
-          // If no other cards are open, take settings-menu-open off the body.
-          if (!container.querySelector('.card-menu-active')) {
-            document.body.classList.remove('settings-menu-open');
-          }
-          window.scrollTo(0, 0);
-        });
-        card.insertBefore(back, row);
-      }
-    });
+  // If the card rebuilds its own innerHTML (Goals, Circadian, Storage, Inbox,
+  // etc.), the menu row + back button get wiped. A MutationObserver puts them
+  // back without disturbing the rebuilt content.
+  const obs = new MutationObserver(() => {
+    if (!card.querySelector(':scope > .settings-menu-row')) {
+      applyMenuRow(card, container);
+    }
   });
+  obs.observe(card, { childList: true });
+}
+
+function applyMenuRow(card, container) {
+  const h3 = card.querySelector(':scope > h3');
+  if (!h3) return;
+  // Avoid duplicates.
+  if (card.querySelector(':scope > .settings-menu-row')) return;
+
+  const row = document.createElement('button');
+  row.className = 'settings-menu-row';
+  row.innerHTML = `<span class="settings-menu-title">${h3.innerHTML}</span><span class="settings-menu-chev">›</span>`;
+  card.insertBefore(row, h3);
+
+  // Re-attach back button if needed.
+  if (card.classList.contains('card-menu-active') &&
+      !card.querySelector(':scope > .settings-menu-back')) {
+    addBackButton(card, container);
+  }
+
+  row.addEventListener('click', () => {
+    document.body.classList.add('settings-menu-open');
+    card.classList.add('card-menu-active');
+    addBackButton(card, container);
+  });
+}
+
+function addBackButton(card, container) {
+  if (card.querySelector(':scope > .settings-menu-back')) return;
+  const back = document.createElement('button');
+  back.className = 'settings-menu-back';
+  back.innerHTML = '←';
+  back.setAttribute('aria-label', 'Back');
+  back.addEventListener('click', (e) => {
+    e.stopPropagation();
+    card.classList.remove('card-menu-active');
+    if (!container || !container.querySelector('.card-menu-active')) {
+      document.body.classList.remove('settings-menu-open');
+    }
+    window.scrollTo(0, 0);
+  });
+  // Place at top of the card so it's visible when the menu opens.
+  card.insertBefore(back, card.firstChild);
 }
 
 function _legacy_collapseSettingsCards_unused(container) {
