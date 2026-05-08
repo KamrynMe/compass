@@ -48,6 +48,33 @@ async function adminIsLoggedIn() {
 }
 
 async function setSyncConfig(c) { await setSetting('syncConfig', c); }
+// Feedback submission — works for ALL users (not just admins) using the public
+// anon key. Inserts a row into the `feedback` table.
+async function submitFeedback(body) {
+  const url = `${SYNC_PROJECT_URL.replace(/\/$/, '')}/rest/v1/feedback`;
+  const deviceId = await syncDeviceId();
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'apikey': SYNC_PROJECT_KEY,
+      'Authorization': `Bearer ${SYNC_PROJECT_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify({
+      device_id: deviceId,
+      body,
+      user_agent: (navigator.userAgent || '').slice(0, 200),
+      app_version: 'v1.0.0',
+    }),
+  });
+  if (!r.ok && r.status !== 201 && r.status !== 200) {
+    const txt = await r.text().catch(() => '');
+    throw new Error('HTTP ' + r.status + (txt ? ' — ' + txt.slice(0, 120) : ''));
+  }
+  return true;
+}
+
 async function syncDeviceId() {
   let id = await getSetting('deviceId');
   if (!id) {

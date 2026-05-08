@@ -230,7 +230,7 @@ async function renderSettingsView(container) {
   cardF.className = 'card';
   const sEnabled = soundsEnabled();
   cardF.innerHTML = `
-    <h3>Feedback</h3>
+    <h3>Audio</h3>
     <label class="setting-row" style="flex-direction:row;align-items:center;justify-content:space-between;">
       <div>
         <div class="setting-label">Check sounds</div>
@@ -256,12 +256,13 @@ async function renderSettingsView(container) {
   await renderStorageCard(cardS);
 
   await renderAdvancedCard(container);
+  await renderFeedbackCard(container);
 
   const card4 = document.createElement('div');
   card4.className = 'card card-about';
   card4.innerHTML = `
     <h3>About</h3>
-    <div class="setting-help">Scheduler · <strong>Beta</strong> — built ${new Date().toLocaleDateString()}.<br>Made by Cameron Thomas.<br>All data lives only on this device unless cloud sync is enabled.</div>
+    <div class="setting-help">Scheduler · <strong>v1.0.0</strong> — built ${new Date().toLocaleDateString()}.<br>Made by Cameron Thomas.<br>All data lives only on this device unless cloud sync is enabled.</div>
   `;
   container.appendChild(card4);
 
@@ -571,6 +572,38 @@ async function renderSyncCard(container) {
     });
   }
   await paint();
+}
+
+async function renderFeedbackCard(container) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  container.appendChild(card);
+  card.innerHTML = `
+    <h3>Feedback</h3>
+    <div class="setting-help">Have a suggestion, bug, or idea? Send it directly to the dev team.</div>
+    <div id="fb-state">
+      <div class="setting-row">
+        <textarea class="input-text" id="fb-body" placeholder="Type your feedback here…" rows="5" style="min-height:120px;resize:vertical;"></textarea>
+      </div>
+      <div class="row-buttons" style="margin-top:8px;">
+        <button class="btn-primary" id="fb-send" style="flex:1;">Send</button>
+      </div>
+    </div>
+  `;
+  card.querySelector('#fb-send').addEventListener('click', async () => {
+    const body = card.querySelector('#fb-body').value.trim();
+    if (!body) { showToast('Type something first'); return; }
+    try {
+      await submitFeedback(body);
+      card.querySelector('#fb-state').innerHTML = `
+        <div style="text-align:center;font-size:18px;font-weight:700;color:#1ec45a;padding:24px 8px;">
+          Feedback sent! 🎉
+        </div>
+      `;
+    } catch (e) {
+      showToast('Send failed: ' + (e.message || 'unknown'));
+    }
+  });
 }
 
 async function renderAdvancedCard(container) {
