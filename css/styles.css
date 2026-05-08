@@ -928,7 +928,9 @@ input[type="time"].input-text { font-family: inherit; }
 .settings-menu-title { display: flex; align-items: center; gap: 8px; }
 .settings-menu-chev { color: var(--ink3); font-size: 22px; line-height: 1; }
 
-/* Active (open) state — full viewport sheet. */
+/* Active (open) state — full viewport sheet. Body is vertically centered
+   when shorter than the viewport so it sits at thumb height; scrolls from
+   the top when taller. */
 .card-menu-host.card-menu-active {
   position: fixed; inset: 0; z-index: 150;
   background: var(--bg);
@@ -937,20 +939,25 @@ input[type="time"].input-text { font-family: inherit; }
   padding: calc(8px + var(--safe-top)) 14px calc(80px + var(--safe-bottom));
   border-radius: 0;
   margin: 0;
+  display: flex;
+  flex-direction: column;
 }
+.card-menu-host.card-menu-active > .card-menu-body { margin: auto 0; }
 .card-menu-host.card-menu-active > .card-menu-body > h3 {
   margin: 4px 0 12px 56px;
 }
 .card-menu-host.card-menu-active > .card-menu-body { padding-top: 8px; }
 .settings-menu-back {
   position: sticky; top: 0;
+  align-self: flex-start;
+  flex-shrink: 0;
   background: var(--surface); border: 1px solid var(--rule);
   border-radius: 8px; width: 44px; height: 44px;
   font-size: 22px; font-weight: 600; color: var(--ink);
   z-index: 5;
   display: none;
   align-items: center; justify-content: center;
-  margin-bottom: -36px; /* sit alongside the h3 */
+  margin-bottom: 4px;
 }
 .card-menu-host.card-menu-active > .settings-menu-back { display: flex; }
 
