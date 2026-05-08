@@ -61,8 +61,8 @@
 :root[data-theme="dark"] .pillar.health .pillar-name { color: var(--h-border); }
 :root[data-theme="dark"] .pillar.strategy .pillar-head { background: #2a2418; }
 :root[data-theme="dark"] .pillar.strategy .pillar-name { color: var(--st-border); }
-:root[data-theme="dark"] .pillar.financial .pillar-head { background: #221830; }
-:root[data-theme="dark"] .pillar.financial .pillar-name { color: var(--f-border); }
+:root[data-theme="dark"] .pillar.expansion .pillar-head { background: #221830; }
+:root[data-theme="dark"] .pillar.expansion .pillar-name { color: var(--f-border); }
 :root[data-theme="dark"] .pillar.enjoyment .pillar-head { background: #182a20; }
 :root[data-theme="dark"] .pillar.enjoyment .pillar-name { color: var(--e-border); }
 :root[data-theme="dark"] .q { border-bottom-color: var(--rule); }
@@ -300,8 +300,8 @@ button { cursor: pointer; touch-action: manipulation; }
 .pillar.health    .pillar-name { color: var(--h-border); }
 .pillar.strategy  .pillar-head { background: var(--st-bg); border-bottom: 1px solid var(--st-border); }
 .pillar.strategy  .pillar-name { color: var(--st-border); }
-.pillar.financial .pillar-head { background: var(--f-bg);  border-bottom: 1px solid var(--f-border); }
-.pillar.financial .pillar-name { color: var(--f-border); }
+.pillar.expansion .pillar-head { background: var(--f-bg);  border-bottom: 1px solid var(--f-border); }
+.pillar.expansion .pillar-name { color: var(--f-border); }
 .pillar.enjoyment .pillar-head { background: var(--e-bg);  border-bottom: 1px solid var(--e-border); }
 .pillar.enjoyment .pillar-name { color: var(--e-border); }
 
@@ -353,7 +353,7 @@ button { cursor: pointer; touch-action: manipulation; }
 .pillar.spiritual    .q-check { --check-color: var(--s-border); }
 .pillar.health       .q-check { --check-color: var(--h-border); }
 .pillar.strategy     .q-check { --check-color: var(--st-border); }
-.pillar.financial    .q-check { --check-color: var(--f-border); }
+.pillar.expansion    .q-check { --check-color: var(--f-border); }
 .pillar.enjoyment    .q-check { --check-color: var(--e-border); }
 
 .q-body { flex: 1; min-width: 0; }
@@ -1232,7 +1232,7 @@ body.settings-menu-open #tabbar { display: none; }
 .pillar.spiritual    .q-slider { --c: var(--s-border); }
 .pillar.health       .q-slider { --c: var(--h-border); }
 .pillar.strategy     .q-slider { --c: var(--st-border); }
-.pillar.financial    .q-slider { --c: var(--f-border); }
+.pillar.expansion    .q-slider { --c: var(--f-border); }
 .pillar.enjoyment    .q-slider { --c: var(--e-border); }
 
 /* Display number on each habit */

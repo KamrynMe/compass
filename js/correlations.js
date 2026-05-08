@@ -1,5 +1,6 @@
-// Variable catalog for correlation explorer
-function buildVariableCatalog() {
+// Variable catalog for correlation explorer.
+// Pass `records` to also generate "(30d avg)" variants of every variable.
+function buildVariableCatalog(records) {
   const vars = [];
   // Score group is FIRST per UX request — most important variable.
   vars.push({ id: 'score:daily', name: 'Daily Score (points)', group: 'Score',
@@ -60,6 +61,37 @@ function buildVariableCatalog() {
     get: (r) => r.weather ? r.weather.realFeel3pm : null });
   vars.push({ id: 'w:precip', name: 'Precipitation (inches)', group: 'Weather',
     get: (r) => r.weather ? r.weather.precipitation : null });
+
+  // 30-day moving average variants — one per base variable. Skips when no
+  // records were provided (catalogs that don't need avgs can call without).
+  if (Array.isArray(records) && records.length) {
+    const sortedAsc = records.slice().sort((a, b) => a.date.localeCompare(b.date));
+    const baseVars = vars.slice();
+    for (const v of baseVars) {
+      vars.push({
+        id: 'avg30:' + v.id,
+        name: v.name + ' (30d avg)',
+        group: v.group + ' (30d)',
+        get: (record) => {
+          // Average over the previous 30 calendar days ending at record.date
+          // (regardless of how many actual records fall inside that window).
+          const end = new Date(record.date + 'T00:00:00');
+          const start = new Date(end);
+          start.setDate(start.getDate() - 29);
+          const startISO = start.toISOString().slice(0, 10);
+          let sum = 0, count = 0;
+          for (const r of sortedAsc) {
+            if (r.date < startISO || r.date > record.date) continue;
+            const val = v.get(r);
+            if (val == null || isNaN(val)) continue;
+            sum += val;
+            count++;
+          }
+          return count ? sum / count : null;
+        },
+      });
+    }
+  }
   return vars;
 }
 

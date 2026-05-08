@@ -20,6 +20,8 @@ async function navigate() {
   const view = document.getElementById('view');
   // Reset scroll BEFORE render so the URL bar / position:fixed elements settle correctly.
   window.scrollTo(0, 0);
+  // Always release any open settings menu when navigating between tabs.
+  document.body.classList.remove('settings-menu-open');
   view.innerHTML = '<div class="empty-state">Loading…</div>';
   try {
     await ROUTES[route](view);

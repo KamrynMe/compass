@@ -222,7 +222,7 @@ async function renderCalendarCorrelations(container) {
       body.innerHTML = '<div class="empty-state">Need at least 5 days of recent data.</div>';
       return;
     }
-    const catalog = buildVariableCatalog();
+    const catalog = buildVariableCatalog(recent);
     function topN(lag, n) {
       const out = [];
       for (let i = 0; i < catalog.length; i++) {

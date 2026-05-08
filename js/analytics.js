@@ -167,7 +167,7 @@ function drawPillarTrend(all) {
   if (_charts.pillar) _charts.pillar.destroy();
   const days = lastN(all, 14);
   const labels = days.map((d) => d.date.slice(5));
-  const colors = { prerequisite: '#c9a84c', spiritual: '#c05050', health: '#4a7ab0', strategy: '#8a6840', financial: '#8a5ab0', enjoyment: '#4a9a6a' };
+  const colors = { prerequisite: '#c9a84c', spiritual: '#c05050', health: '#4a7ab0', strategy: '#8a6840', expansion: '#8a5ab0', enjoyment: '#4a9a6a' };
   const datasets = PILLARS.map((p) => ({
     label: p.name,
     data: days.map((d) => d.record ? pillarCompletion(d.record, p.id) : 0),
@@ -185,7 +185,7 @@ function drawPillarTrend(all) {
 }
 
 function renderCorrelationExplorer(parent, all) {
-  const catalog = buildVariableCatalog();
+  const catalog = buildVariableCatalog(all);
 
   const axes = document.createElement('div');
   axes.className = 'corr-axes';
@@ -373,7 +373,7 @@ function renderCorrelationExplorer(parent, all) {
 let _expState = { picked: null, lag: 0, search: '', filterGroup: 'all' };
 
 function renderCorrelationExploration(parent, all) {
-  const catalog = buildVariableCatalog();
+  const catalog = buildVariableCatalog(all);
 
   const picked = document.createElement('div');
   picked.className = 'axis-card';
