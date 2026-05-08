@@ -295,27 +295,44 @@ function menuizeCard(card, container) {
 }
 
 function applyMenuRow(card, container) {
-  const h3 = card.querySelector(':scope > h3');
-  if (!h3) return;
-  // Avoid duplicates.
   if (card.querySelector(':scope > .settings-menu-row')) return;
+  // We need a heading to mirror as the menu row label.
+  let h3 = card.querySelector(':scope > h3');
+  if (!h3) {
+    // Maybe card was already wrapped previously and rebuilt without unwrapping.
+    h3 = card.querySelector(':scope > .card-menu-body > h3');
+  }
+  if (!h3) return;
 
+  // Wrap every direct child (except an existing back button, if any) into a
+  // body div so we can hide the body cleanly with CSS without fighting any
+  // inline `style="display:flex"` the inner content might carry.
+  const back = card.querySelector(':scope > .settings-menu-back');
+  const body = document.createElement('div');
+  body.className = 'card-menu-body';
+  const moveTargets = Array.from(card.childNodes).filter((n) => n !== back);
+  for (const n of moveTargets) body.appendChild(n);
+
+  // Build the menu row from the heading (already inside body).
   const row = document.createElement('button');
   row.className = 'settings-menu-row';
   row.innerHTML = `<span class="settings-menu-title">${h3.innerHTML}</span><span class="settings-menu-chev">›</span>`;
-  card.insertBefore(row, h3);
 
-  // Re-attach back button if needed.
-  if (card.classList.contains('card-menu-active') &&
-      !card.querySelector(':scope > .settings-menu-back')) {
-    addBackButton(card, container);
-  }
+  // Reassemble: row, [back?], body
+  card.appendChild(row);
+  if (back) card.appendChild(back);
+  card.appendChild(body);
 
   row.addEventListener('click', () => {
     document.body.classList.add('settings-menu-open');
     card.classList.add('card-menu-active');
     addBackButton(card, container);
   });
+
+  // If active, ensure back button.
+  if (card.classList.contains('card-menu-active')) {
+    addBackButton(card, container);
+  }
 }
 
 function addBackButton(card, container) {

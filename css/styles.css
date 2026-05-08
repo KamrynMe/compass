@@ -907,9 +907,12 @@ input[type="time"].input-text { font-family: inherit; }
   border-radius: 10px;
   overflow: hidden;
 }
-/* Hide the body of a host while inactive. */
-.card-menu-host > *:not(.settings-menu-row):not(.settings-menu-back) { display: none; }
+/* The card body lives in a wrapper so we can hide it via CSS without
+   inline `display:flex/grid` styles inside winning the cascade. */
+.card-menu-host > .card-menu-body { display: none; }
+.card-menu-host.card-menu-active > .card-menu-body { display: block; }
 .card-menu-host > .settings-menu-row { display: flex; }
+.card-menu-host.card-menu-active > .settings-menu-row { display: none; }
 
 .settings-menu-row {
   width: 100%;
@@ -935,11 +938,10 @@ input[type="time"].input-text { font-family: inherit; }
   border-radius: 0;
   margin: 0;
 }
-.card-menu-host.card-menu-active > *:not(.settings-menu-back):not(.settings-menu-row) { display: block; }
-.card-menu-host.card-menu-active > .settings-menu-row { display: none; }
-.card-menu-host.card-menu-active > h3 {
+.card-menu-host.card-menu-active > .card-menu-body > h3 {
   margin: 4px 0 12px 56px;
 }
+.card-menu-host.card-menu-active > .card-menu-body { padding-top: 8px; }
 .settings-menu-back {
   position: sticky; top: 0;
   background: var(--surface); border: 1px solid var(--rule);
