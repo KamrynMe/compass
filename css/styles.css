@@ -899,29 +899,61 @@ input[type="time"].input-text { font-family: inherit; }
 .toggle-switch.on { background: var(--gold); border-color: var(--gold-deep); }
 .toggle-switch.on::after { transform: translateX(22px); }
 
-/* Collapsible Settings cards — every card gets a tap-to-open header. */
-.card-collapsible-host { padding: 0; }
-.card-collapsible-host > details.card-collapsible-inner > summary {
-  display: flex; align-items: center; gap: 10px;
+/* Settings cards as tap-to-open full-screen menus.
+   - Default state: card hides everything except the .settings-menu-row.
+   - Active state (.card-menu-active): card pops to a fixed full-viewport view. */
+.card-menu-host {
+  padding: 0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+/* Hide the body of a host while inactive. */
+.card-menu-host > *:not(.settings-menu-row):not(.settings-menu-back) { display: none; }
+.card-menu-host > .settings-menu-row { display: flex; }
+
+.settings-menu-row {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
   padding: 16px;
-  cursor: pointer;
-  list-style: none;
+  background: transparent;
+  border: none;
   font-size: 16px; font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
 }
-.card-collapsible-host > details.card-collapsible-inner > summary::-webkit-details-marker { display: none; }
-.card-collapsible-host > details.card-collapsible-inner > summary::after {
-  content: '›';
-  margin-left: auto;
-  font-size: 22px; color: var(--ink3);
-  transition: transform 0.18s;
+.settings-menu-title { display: flex; align-items: center; gap: 8px; }
+.settings-menu-chev { color: var(--ink3); font-size: 22px; line-height: 1; }
+
+/* Active (open) state — full viewport sheet. */
+.card-menu-host.card-menu-active {
+  position: fixed; inset: 0; z-index: 150;
+  background: var(--bg);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: calc(8px + var(--safe-top)) 14px calc(80px + var(--safe-bottom));
+  border-radius: 0;
+  margin: 0;
 }
-.card-collapsible-host > details.card-collapsible-inner[open] > summary::after { transform: rotate(90deg); }
-.card-collapsible-host > details.card-collapsible-inner > *:not(summary) {
-  padding: 0 16px 16px;
+.card-menu-host.card-menu-active > *:not(.settings-menu-back):not(.settings-menu-row) { display: block; }
+.card-menu-host.card-menu-active > .settings-menu-row { display: none; }
+.card-menu-host.card-menu-active > h3 {
+  margin: 4px 0 12px 56px;
 }
-.card-collapsible-host > details.card-collapsible-inner > div:not(summary) {
-  padding: 0 16px 16px;
+.settings-menu-back {
+  position: sticky; top: 0;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 8px; width: 44px; height: 44px;
+  font-size: 22px; font-weight: 600; color: var(--ink);
+  z-index: 5;
+  display: none;
+  align-items: center; justify-content: center;
+  margin-bottom: -36px; /* sit alongside the h3 */
 }
+.card-menu-host.card-menu-active > .settings-menu-back { display: flex; }
+
+/* Hide the bottom tabbar while a settings menu is open so it feels modal. */
+body.settings-menu-open #tabbar { display: none; }
 
 /* Inbox — collapsed summary card */
 .inbox-card { padding: 0; }

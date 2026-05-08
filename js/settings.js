@@ -258,19 +258,62 @@ async function renderSettingsView(container) {
   await renderAdvancedCard(container);
 
   const card4 = document.createElement('div');
-  card4.className = 'card';
+  card4.className = 'card card-about';
   card4.innerHTML = `
     <h3>About</h3>
     <div class="setting-help">Scheduler · <strong>Beta</strong> — built ${new Date().toLocaleDateString()}.<br>Made by Cameron Thomas.<br>All data lives only on this device unless cloud sync is enabled.</div>
   `;
   container.appendChild(card4);
 
-  // Compress all cards into tap-to-open accordions, except Inbox (already collapsed)
-  // and Storage (must stay inline so the photo-browser button is reachable).
-  collapseSettingsCards(container);
+  // Convert every non-About card into a tap-to-open full-screen menu.
+  menuizeSettingsCards(container);
 }
 
-function collapseSettingsCards(container) {
+function menuizeSettingsCards(container) {
+  const cards = container.querySelectorAll(':scope > .card');
+  cards.forEach((card) => {
+    if (card.classList.contains('card-about')) return; // About stays inline
+    if (card.dataset.menuized === '1') return;
+    const h3 = card.querySelector(':scope > h3');
+    if (!h3) return;
+    card.dataset.menuized = '1';
+
+    // Hide the card body by default; show only the menu row.
+    card.classList.add('card-menu-host');
+
+    const row = document.createElement('button');
+    row.className = 'settings-menu-row';
+    row.innerHTML = `<span class="settings-menu-title">${h3.innerHTML}</span><span class="settings-menu-chev">›</span>`;
+
+    // Insert row before the h3 (which we'll keep but hide visually inside the
+    // menu when collapsed, and display when active for context).
+    card.insertBefore(row, h3);
+
+    row.addEventListener('click', () => {
+      document.body.classList.add('settings-menu-open');
+      card.classList.add('card-menu-active');
+      // Add a back button + safe-area scaffolding once.
+      if (!card.querySelector(':scope > .settings-menu-back')) {
+        const back = document.createElement('button');
+        back.className = 'settings-menu-back';
+        back.innerHTML = '←';
+        back.setAttribute('aria-label', 'Back');
+        back.addEventListener('click', (e) => {
+          e.stopPropagation();
+          card.classList.remove('card-menu-active');
+          // If no other cards are open, take settings-menu-open off the body.
+          if (!container.querySelector('.card-menu-active')) {
+            document.body.classList.remove('settings-menu-open');
+          }
+          window.scrollTo(0, 0);
+        });
+        card.insertBefore(back, row);
+      }
+    });
+  });
+}
+
+function _legacy_collapseSettingsCards_unused(container) {
   const cards = container.querySelectorAll(':scope > .card');
   cards.forEach((card) => {
     if (card.classList.contains('inbox-card')) return;
