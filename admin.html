@@ -75,6 +75,37 @@
   .btn-complete { background: #154e2a; color: #b8f5cf; border: 1px solid #1f7a40; }
   .btn-reopen { background: #4a3018; color: #f0d4a0; border: 1px solid #6e4624; }
   .btn-delete { background: #4a1818; color: #ffb4b4; border: 1px solid #6e2424; }
+  .btn-note { background: #2a2a48; color: #cbcaf0; border: 1px solid #4040a8; }
+  .btn-queue { background: #2e1e3a; color: #d6b8f0; border: 1px solid var(--purple); }
+  .btn-unqueue { background: #2e1e3a; color: #d6b8f0; border: 1px solid var(--purple); opacity: 0.7; }
+  .note-editor {
+    margin-top: 10px; display: none;
+    background: #1a1610; border: 1px solid var(--rule); border-radius: 8px;
+    padding: 10px;
+  }
+  .note-editor.open { display: block; }
+  .note-editor textarea {
+    width: 100%; min-height: 80px; resize: vertical;
+    background: #2a2418; color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 6px;
+    padding: 8px 10px; font-family: inherit; font-size: 14px; line-height: 1.5;
+  }
+  .note-editor .row-buttons { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+  .admin-note-display {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: #1a1a2e;
+    border-left: 3px solid var(--purple);
+    border-radius: 0 6px 6px 0;
+    font-size: 13px; color: var(--ink2); line-height: 1.5;
+    white-space: pre-wrap;
+  }
+  .admin-note-display::before {
+    content: 'Admin note';
+    display: block;
+    font-size: 10px; font-weight: 800; letter-spacing: 1px;
+    color: var(--purple); margin-bottom: 4px; text-transform: uppercase;
+  }
   .row { display: flex; gap: 8px; align-items: center; }
   .row > * { flex: 1; }
   .empty { color: var(--ink3); text-align: center; padding: 32px 8px; }
@@ -105,6 +136,8 @@
   }
   .pill.snoozed { background: #2a2210; color: var(--gold); border-color: var(--gold-deep); }
   .pill.completed { background: #102e1a; color: #4dd587; border-color: #1f7a40; }
+  .pill.queued { background: #2a1e3a; color: #d6b8f0; border-color: var(--purple); }
+  .fb-row.queued { border-left: 3px solid var(--purple); padding-left: 10px; margin-left: -10px; }
   .filter-tabs {
     display: flex; gap: 0; margin-bottom: 14px;
     background: var(--surface); border: 1px solid var(--rule);
@@ -144,6 +177,7 @@
 
     <div class="filter-tabs" id="filter-tabs">
       <button class="filter-tab active" data-filter="open">Uncompleted</button>
+      <button class="filter-tab" data-filter="queue">Queue</button>
       <button class="filter-tab" data-filter="done">Completed</button>
       <button class="filter-tab" data-filter="all">All</button>
     </div>
@@ -224,19 +258,23 @@
 
   function applyFilter(rows) {
     if (_filter === 'open') return rows.filter((r) => !r.completed_at);
+    if (_filter === 'queue') return rows.filter((r) => !!r.queued_at && !r.completed_at);
     if (_filter === 'done') return rows.filter((r) => !!r.completed_at);
     return rows;
   }
 
   function applySort(rows) {
-    // Open: snoozed sink to bottom; otherwise newest first.
-    // Done: completed_at desc.
-    // All: completed at the bottom; within open the same snooze rule.
+    // Buckets: queued (0) > active (1) > snoozed (2) > completed (3).
+    // Within Queue view, sort by queued_at desc; otherwise by relevant timestamp.
     const score = (r) => {
-      let bucket = 0; // 0 active, 1 snoozed, 2 completed
-      if (r.completed_at) bucket = 2;
-      else if (r.snoozed_at) bucket = 1;
-      const t = new Date(r.completed_at || r.snoozed_at || r.created_at || 0).getTime();
+      let bucket;
+      if (r.completed_at) bucket = 3;
+      else if (r.queued_at) bucket = 0;
+      else if (r.snoozed_at) bucket = 2;
+      else bucket = 1;
+      const t = new Date(
+        r.completed_at || r.queued_at || r.snoozed_at || r.created_at || 0
+      ).getTime();
       return [bucket, -t];
     };
     return rows.slice().sort((a, b) => {
@@ -255,15 +293,17 @@
 
     const totalOpen = _all.filter((r) => !r.completed_at).length;
     const totalDone = _all.filter((r) => !!r.completed_at).length;
-    $('#counts').textContent = `${totalOpen} open · ${totalDone} completed · ${_all.length} total${q ? ` (showing ${rows.length})` : ''}`;
+    const totalQueue = _all.filter((r) => !!r.queued_at && !r.completed_at).length;
+    $('#counts').textContent = `${totalOpen} open · ${totalQueue} queued · ${totalDone} completed · ${_all.length} total${q ? ` (showing ${rows.length})` : ''}`;
 
     if (!rows.length) { $('#list').innerHTML = '<div class="empty">No feedback to show.</div>'; return; }
 
     $('#list').innerHTML = rows.map((r) => {
-      const cls = r.completed_at ? 'completed' : (r.snoozed_at ? 'snoozed' : '');
-      const tag = r.completed_at
-        ? `<span class="pill completed">Done · ${fmtDate(r.completed_at)}</span>`
-        : (r.snoozed_at ? `<span class="pill snoozed">Snoozed · ${fmtDate(r.snoozed_at)}</span>` : '');
+      const cls = r.completed_at ? 'completed' : (r.queued_at ? 'queued' : (r.snoozed_at ? 'snoozed' : ''));
+      const tags = [];
+      if (r.queued_at && !r.completed_at) tags.push(`<span class="pill queued">In Queue · ${fmtDate(r.queued_at)}</span>`);
+      if (r.snoozed_at && !r.completed_at) tags.push(`<span class="pill snoozed">Snoozed · ${fmtDate(r.snoozed_at)}</span>`);
+      if (r.completed_at) tags.push(`<span class="pill completed">Done · ${fmtDate(r.completed_at)}</span>`);
       const completeBtn = r.completed_at
         ? `<button class="btn-action btn-reopen" data-act="reopen">↺ Reopen</button>`
         : `<button class="btn-action btn-complete" data-act="complete">✓ Completed</button>`;
@@ -272,19 +312,41 @@
         : (r.snoozed_at
             ? `<button class="btn-action btn-snooze" data-act="unsnooze">⏰ Unsnooze</button>`
             : `<button class="btn-action btn-snooze" data-act="snooze">💤 Snooze</button>`);
+      const queueBtn = r.completed_at
+        ? ''
+        : (r.queued_at
+            ? `<button class="btn-action btn-unqueue" data-act="unqueue">↩ Remove from Queue</button>`
+            : `<button class="btn-action btn-queue" data-act="queue">＋ Queue</button>`);
+      const noteHas = !!(r.admin_note && r.admin_note.trim());
+      const noteBtn = `<button class="btn-action btn-note" data-act="note">${noteHas ? '✎ Edit note' : '＋ Add note'}</button>`;
+      const noteDisplay = noteHas ? `<div class="admin-note-display">${escapeHtml(r.admin_note)}</div>` : '';
+      const noteEditor = `
+        <div class="note-editor" data-editor>
+          <textarea data-note-text placeholder="Private admin notes (only visible to admins)…">${escapeHtml(r.admin_note || '')}</textarea>
+          <div class="row-buttons">
+            <button class="btn-action btn-delete" data-act="note-clear">Clear</button>
+            <button class="btn-action btn-copy" data-act="note-cancel">Cancel</button>
+            <button class="btn-action btn-complete" data-act="note-save">Save</button>
+          </div>
+        </div>
+      `;
       return `
         <div class="fb-row ${cls}" data-id="${escapeHtml(r.id)}">
           <div class="fb-meta">
-            <span>${fmtDate(r.created_at)} <span class="pill">${escapeHtml(r.app_version || '?')}</span> ${tag}</span>
+            <span>${fmtDate(r.created_at)} <span class="pill">${escapeHtml(r.app_version || '?')}</span> ${tags.join(' ')}</span>
             <span class="fb-id">${escapeHtml((r.device_id || '').slice(0, 8))}…</span>
           </div>
           <div class="fb-body">${escapeHtml(r.body || '')}</div>
+          ${noteDisplay}
           <div class="fb-actions">
             <button class="btn-action btn-copy" data-act="copy">📋 Copy</button>
+            ${noteBtn}
+            ${queueBtn}
             ${snoozeBtn}
             ${completeBtn}
             <button class="btn-action btn-delete" data-act="delete">Delete</button>
           </div>
+          ${noteEditor}
         </div>
       `;
     }).join('');
@@ -317,6 +379,42 @@
         () => patchFeedback(id, { completed_at: null }),
         'Reopened'
       ));
+      act('queue')?.addEventListener('click', () => wrap(
+        () => patchFeedback(id, { queued_at: new Date().toISOString(), snoozed_at: null }),
+        'Added to queue'
+      ));
+      act('unqueue')?.addEventListener('click', () => wrap(
+        () => patchFeedback(id, { queued_at: null }),
+        'Removed from queue'
+      ));
+      // Notes: toggle inline editor.
+      const editor = row.querySelector('[data-editor]');
+      act('note')?.addEventListener('click', () => {
+        editor.classList.toggle('open');
+        if (editor.classList.contains('open')) editor.querySelector('[data-note-text]').focus();
+      });
+      act('note-cancel')?.addEventListener('click', () => {
+        editor.classList.remove('open');
+        editor.querySelector('[data-note-text]').value = r?.admin_note || '';
+      });
+      act('note-save')?.addEventListener('click', async () => {
+        const text = editor.querySelector('[data-note-text]').value;
+        try {
+          await patchFeedback(id, { admin_note: text });
+          toast('Note saved');
+          editor.classList.remove('open');
+          refresh();
+        } catch (e) { toast('Save failed: ' + (e.message || e)); }
+      });
+      act('note-clear')?.addEventListener('click', async () => {
+        if (!confirm('Clear the admin note for this message?')) return;
+        try {
+          await patchFeedback(id, { admin_note: null });
+          toast('Note cleared');
+          editor.classList.remove('open');
+          refresh();
+        } catch (e) { toast('Clear failed: ' + (e.message || e)); }
+      });
       act('delete')?.addEventListener('click', async () => {
         if (!confirm('Delete this feedback message?')) return;
         wrap(() => deleteFeedback(id), 'Deleted');

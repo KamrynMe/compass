@@ -38,3 +38,17 @@ create policy "anon delete feedback"
 
 -- Helpful index for "newest first" queries.
 create index if not exists feedback_created_at_idx on public.feedback (created_at desc);
+
+-- Admin workflow columns (run anytime after the initial table creation).
+alter table public.feedback add column if not exists snoozed_at   timestamptz;
+alter table public.feedback add column if not exists completed_at timestamptz;
+alter table public.feedback add column if not exists admin_note   text;
+alter table public.feedback add column if not exists queued_at    timestamptz;
+
+drop policy if exists "anon update feedback" on public.feedback;
+create policy "anon update feedback"
+  on public.feedback for update
+  to anon
+  using (true) with check (true);
+
+grant update on public.feedback to anon, authenticated;
