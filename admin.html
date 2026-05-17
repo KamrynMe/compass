@@ -285,6 +285,7 @@
   }
 
   function render() {
+    const savedScroll = window.scrollY;
     document.querySelectorAll('.filter-tab').forEach((b) => b.classList.toggle('active', b.dataset.filter === _filter));
     const q = ($('#search').value || '').trim().toLowerCase();
     let rows = applyFilter(_all);
@@ -355,38 +356,26 @@
       const id = row.dataset.id;
       const r = _all.find((x) => String(x.id) === id);
       const act = (name) => row.querySelector(`[data-act="${name}"]`);
-      const wrap = async (fn, label) => {
-        try { await fn(); toast(label); refresh(); }
-        catch (e) { toast('Failed: ' + (e.message || e)); }
+      // Apply a local patch + re-render in place. No full refetch — keeps
+      // scroll position so you can queue/snooze multiple items in a row.
+      const wrap = async (patch, label) => {
+        try {
+          await patchFeedback(id, patch);
+          if (r) Object.assign(r, patch);
+          toast(label);
+          render();
+        } catch (e) { toast('Failed: ' + (e.message || e)); }
       };
       act('copy')?.addEventListener('click', async () => {
         try { await navigator.clipboard.writeText(r?.body || ''); toast('Copied'); }
         catch (_) { toast('Copy failed'); }
       });
-      act('snooze')?.addEventListener('click', () => wrap(
-        () => patchFeedback(id, { snoozed_at: new Date().toISOString() }),
-        'Snoozed'
-      ));
-      act('unsnooze')?.addEventListener('click', () => wrap(
-        () => patchFeedback(id, { snoozed_at: null }),
-        'Unsnoozed'
-      ));
-      act('complete')?.addEventListener('click', () => wrap(
-        () => patchFeedback(id, { completed_at: new Date().toISOString(), snoozed_at: null }),
-        'Marked complete'
-      ));
-      act('reopen')?.addEventListener('click', () => wrap(
-        () => patchFeedback(id, { completed_at: null }),
-        'Reopened'
-      ));
-      act('queue')?.addEventListener('click', () => wrap(
-        () => patchFeedback(id, { queued_at: new Date().toISOString(), snoozed_at: null }),
-        'Added to queue'
-      ));
-      act('unqueue')?.addEventListener('click', () => wrap(
-        () => patchFeedback(id, { queued_at: null }),
-        'Removed from queue'
-      ));
+      act('snooze')?.addEventListener('click', () => wrap({ snoozed_at: new Date().toISOString() }, 'Snoozed'));
+      act('unsnooze')?.addEventListener('click', () => wrap({ snoozed_at: null }, 'Unsnoozed'));
+      act('complete')?.addEventListener('click', () => wrap({ completed_at: new Date().toISOString(), snoozed_at: null }, 'Marked complete'));
+      act('reopen')?.addEventListener('click', () => wrap({ completed_at: null }, 'Reopened'));
+      act('queue')?.addEventListener('click', () => wrap({ queued_at: new Date().toISOString(), snoozed_at: null }, 'Added to queue'));
+      act('unqueue')?.addEventListener('click', () => wrap({ queued_at: null }, 'Removed from queue'));
       // Notes: toggle inline editor.
       const editor = row.querySelector('[data-editor]');
       act('note')?.addEventListener('click', () => {
@@ -401,25 +390,34 @@
         const text = editor.querySelector('[data-note-text]').value;
         try {
           await patchFeedback(id, { admin_note: text });
+          if (r) r.admin_note = text;
           toast('Note saved');
-          editor.classList.remove('open');
-          refresh();
+          render();
         } catch (e) { toast('Save failed: ' + (e.message || e)); }
       });
       act('note-clear')?.addEventListener('click', async () => {
         if (!confirm('Clear the admin note for this message?')) return;
         try {
           await patchFeedback(id, { admin_note: null });
+          if (r) r.admin_note = null;
           toast('Note cleared');
-          editor.classList.remove('open');
-          refresh();
+          render();
         } catch (e) { toast('Clear failed: ' + (e.message || e)); }
       });
       act('delete')?.addEventListener('click', async () => {
         if (!confirm('Delete this feedback message?')) return;
-        wrap(() => deleteFeedback(id), 'Deleted');
+        try {
+          await deleteFeedback(id);
+          _all = _all.filter((x) => String(x.id) !== id);
+          toast('Deleted');
+          render();
+        } catch (e) { toast('Delete failed: ' + (e.message || e)); }
       });
     });
+
+    // Restore scroll position so the page doesn't jump when re-rendering after
+    // a queue/snooze/complete/note-save action.
+    window.scrollTo(0, savedScroll);
   }
 
   $('#login-btn').addEventListener('click', () => {
